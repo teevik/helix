@@ -3,13 +3,15 @@ use futures_util::future::BoxFuture;
 use futures_util::FutureExt;
 use helix_core::auto_pairs::AutoPairs;
 use helix_core::Range;
+use helix_vcs::LineDiffs;
 use serde::de::{self, Deserialize, Deserializer};
 use serde::Serialize;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -120,6 +122,8 @@ pub struct Document {
 
     diagnostics: Vec<Diagnostic>,
     language_server: Option<Arc<helix_lsp::Client>>,
+    version_control: Option<Rc<RefCell<helix_vcs::Git>>>,
+    line_diffs: LineDiffs,
 }
 
 use std::{fmt, mem};
@@ -358,6 +362,8 @@ impl Document {
             last_saved_revision: 0,
             modified_since_accessed: false,
             language_server: None,
+            version_control: None,
+            line_diffs: LineDiffs::new(),
         }
     }
 
@@ -696,6 +702,20 @@ impl Document {
         self.language_server = language_server;
     }
 
+    pub fn set_version_control(&mut self, vcs: Option<Rc<RefCell<helix_vcs::Git>>>) {
+        self.version_control = vcs;
+    }
+
+    pub fn diff_with_vcs(&mut self) {
+        let vcs = self
+            .version_control
+            .as_ref()
+            .and_then(|v| v.try_borrow_mut().ok());
+        if let Some((mut vcs, path)) = vcs.zip(self.path()) {
+            self.line_diffs = vcs.line_diff_with_head(path, &self.text().to_string());
+        }
+    }
+
     /// Select text within the [`Document`].
     pub fn set_selection(&mut self, view_id: ViewId, selection: Selection) {
         // TODO: use a transaction?
@@ -804,6 +824,8 @@ impl Document {
                     tokio::spawn(notify);
                 }
             }
+
+            self.diff_with_vcs();
         }
         success
     }
@@ -980,6 +1002,10 @@ impl Document {
     pub fn language_server(&self) -> Option<&helix_lsp::Client> {
         let server = self.language_server.as_deref()?;
         server.is_initialized().then(|| server)
+    }
+
+    pub fn line_diffs(&self) -> &LineDiffs {
+        &self.line_diffs
     }
 
     #[inline]
