@@ -503,7 +503,7 @@ impl Default for Config {
             whitespace: WhitespaceConfig::default(),
             indent_guides: IndentGuidesConfig::default(),
             color_modes: false,
-            rainbow_brackets: false,
+            rainbow_brackets: true,
         }
     }
 }
