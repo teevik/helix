@@ -2212,9 +2212,9 @@ fn injection_for_match<'a>(
     (language_name, content_node, included_children)
 }
 
-pub struct Merge<I> {
+pub struct Merge<'a, I> {
     iter: I,
-    spans: Box<dyn Iterator<Item = (usize, std::ops::Range<usize>)>>,
+    spans: Box<dyn Iterator<Item = (usize, std::ops::Range<usize>)> + 'a>,
 
     next_event: Option<HighlightEvent>,
     next_span: Option<(usize, std::ops::Range<usize>)>,
@@ -2223,10 +2223,10 @@ pub struct Merge<I> {
 }
 
 /// Merge a list of spans into the highlight event stream.
-pub fn merge<I: Iterator<Item = HighlightEvent>>(
+pub fn merge<'a, I: Iterator<Item = HighlightEvent>>(
     iter: I,
     spans: Vec<(usize, std::ops::Range<usize>)>,
-) -> Merge<I> {
+) -> Merge<'a, I> {
     let spans = Box::new(spans.into_iter());
     let mut merge = Merge {
         iter,
@@ -2240,7 +2240,23 @@ pub fn merge<I: Iterator<Item = HighlightEvent>>(
     merge
 }
 
-impl<I: Iterator<Item = HighlightEvent>> Iterator for Merge<I> {
+pub fn merge_iters<'a, I: Iterator<Item = HighlightEvent>>(
+    iter: I,
+    spans: Box<dyn Iterator<Item = (usize, std::ops::Range<usize>)> + 'a>,
+) -> Merge<'a, I> {
+    let mut merge = Merge {
+        iter,
+        spans,
+        next_event: None,
+        next_span: None,
+        queue: Vec::new(),
+    };
+    merge.next_event = merge.iter.next();
+    merge.next_span = merge.spans.next();
+    merge
+}
+
+impl<'a, I: Iterator<Item = HighlightEvent>> Iterator for Merge<'a, I> {
     type Item = HighlightEvent;
     fn next(&mut self) -> Option<Self::Item> {
         use HighlightEvent::*;
