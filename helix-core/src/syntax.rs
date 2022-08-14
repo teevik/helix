@@ -2212,6 +2212,47 @@ fn injection_for_match<'a>(
     (language_name, content_node, included_children)
 }
 
+pub struct SpanIter<I> {
+    iter: I,
+    queue: Vec<(usize, Option<std::ops::Range<usize>>)>,
+}
+
+/// Creates an iterator over `(usize, std::ops::Range<usize>)` for an iterator
+/// of `HighlightEvent`s.
+pub fn span_iter<I: Iterator<Item = HighlightEvent>>(iter: I) -> SpanIter<I> {
+    SpanIter {
+        iter,
+        queue: Vec::new(),
+    }
+}
+
+impl<I: Iterator<Item = HighlightEvent>> Iterator for SpanIter<I> {
+    type Item = (usize, std::ops::Range<usize>);
+    fn next(&mut self) -> Option<Self::Item> {
+        use HighlightEvent::*;
+
+        for event in self.iter.by_ref() {
+            match event {
+                HighlightStart(highlight) => self.queue.push((highlight.0, None)),
+                Source { start, end } => {
+                    if let Some(head) = self.queue.last_mut() {
+                        head.1 = Some(start..end);
+                    }
+                }
+                HighlightEnd => loop {
+                    match self.queue.pop() {
+                        Some((highlight, Some(range))) => return Some((highlight, range)),
+                        Some(_) => (),
+                        None => return None,
+                    }
+                },
+            }
+        }
+
+        None
+    }
+}
+
 pub struct Merge<'a, I> {
     iter: I,
     spans: Box<dyn Iterator<Item = (usize, std::ops::Range<usize>)> + 'a>,
