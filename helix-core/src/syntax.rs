@@ -922,12 +922,12 @@ impl Syntax {
                 captures.peek()?;
 
                 Some(HighlightIterLayer {
-                    highlight_end_stack: Vec::new(),
-                    scope_stack: vec![LocalScope {
+                    context: vec![LocalScope {
                         inherits: false,
                         range: 0..usize::MAX,
                         local_defs: Vec::new(),
                     }],
+                    highlight_end_stack: Vec::new(),
                     cursor,
                     _tree: None,
                     captures,
@@ -954,6 +954,7 @@ impl Syntax {
             layers,
             next_event: None,
             last_highlight_range: None,
+            context: (),
         };
         result.sort_layers();
         result
@@ -1000,6 +1001,7 @@ impl Syntax {
                 captures.peek()?;
 
                 Some(RainbowIterLayer {
+                    context: (),
                     highlight_end_stack: Vec::new(),
                     cursor,
                     _tree: None,
@@ -1019,6 +1021,11 @@ impl Syntax {
             )
         });
 
+        let context = RainbowIterContext {
+            rainbow_stack: Vec::new(),
+            rainbow_length,
+        };
+
         let mut result = RainbowIter {
             source,
             byte_offset: range.map_or(0, |r| r.start),
@@ -1027,8 +1034,7 @@ impl Syntax {
             layers,
             next_event: None,
             last_highlight_range: None,
-            rainbow_stack: Vec::new(),
-            rainbow_length,
+            context,
         };
         result.sort_layers();
         result
@@ -1260,6 +1266,18 @@ pub struct HighlightConfiguration {
 }
 
 #[derive(Debug)]
+struct QueryIter<'a, C, L> {
+    source: RopeSlice<'a>,
+    byte_offset: usize,
+    cancellation_flag: Option<&'a AtomicUsize>,
+    context: C,
+    iter_count: usize,
+    layers: Vec<L>,
+    next_event: Option<HighlightEvent>,
+    last_highlight_range: Option<(usize, usize, usize)>,
+}
+
+#[derive(Debug)]
 struct LocalDef<'a> {
     name: Cow<'a, str>,
     value_range: ops::Range<usize>,
@@ -1273,16 +1291,7 @@ struct LocalScope<'a> {
     local_defs: Vec<LocalDef<'a>>,
 }
 
-#[derive(Debug)]
-struct HighlightIter<'a> {
-    source: RopeSlice<'a>,
-    byte_offset: usize,
-    cancellation_flag: Option<&'a AtomicUsize>,
-    layers: Vec<HighlightIterLayer<'a>>,
-    iter_count: usize,
-    next_event: Option<HighlightEvent>,
-    last_highlight_range: Option<(usize, usize, usize)>,
-}
+type HighlightIter<'a> = QueryIter<'a, (), HighlightIterLayer<'a>>;
 
 #[derive(Debug)]
 struct RainbowScope {
@@ -1292,17 +1301,12 @@ struct RainbowScope {
 }
 
 #[derive(Debug)]
-struct RainbowIter<'a> {
-    source: RopeSlice<'a>,
-    byte_offset: usize,
-    cancellation_flag: Option<&'a AtomicUsize>,
-    layers: Vec<RainbowIterLayer<'a>>,
-    iter_count: usize,
-    next_event: Option<HighlightEvent>,
-    last_highlight_range: Option<(usize, usize, usize)>,
+struct RainbowIterContext {
     rainbow_stack: Vec<RainbowScope>,
     rainbow_length: usize,
 }
+
+type RainbowIter<'a> = QueryIter<'a, RainbowIterContext, RainbowIterLayer<'a>>;
 
 // Adapter to convert rope chunks to bytes
 pub struct ChunksBytes<'a> {
@@ -1327,24 +1331,7 @@ impl<'a> TextProvider<'a> for RopeProvider<'a> {
     }
 }
 
-struct HighlightIterLayer<'a> {
-    _tree: Option<Tree>,
-    cursor: QueryCursor,
-    captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>>>,
-    config: &'a HighlightConfiguration,
-    highlight_end_stack: Vec<usize>,
-    scope_stack: Vec<LocalScope<'a>>,
-    depth: usize,
-    ranges: &'a [Range],
-}
-
-impl<'a> fmt::Debug for HighlightIterLayer<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("HighlightIterLayer").finish()
-    }
-}
-
-struct RainbowIterLayer<'a> {
+struct QueryIterLayer<'a, C> {
     _tree: Option<Tree>, // TODO remove
     cursor: QueryCursor,
     captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>>>,
@@ -1352,13 +1339,18 @@ struct RainbowIterLayer<'a> {
     highlight_end_stack: Vec<usize>,
     depth: usize,
     ranges: &'a [Range],
+    context: C,
 }
 
-impl<'a> fmt::Debug for RainbowIterLayer<'a> {
+impl<'a, C> fmt::Debug for QueryIterLayer<'a, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RainbowIterLayer").finish()
+        f.debug_struct("QueryIterLayer").finish()
     }
 }
+
+type HighlightIterLayer<'a> = QueryIterLayer<'a, Vec<LocalScope<'a>>>;
+
+type RainbowIterLayer<'a> = QueryIterLayer<'a, ()>;
 
 impl HighlightConfiguration {
     /// Creates a `HighlightConfiguration` for a given `Grammar` and set of highlighting
@@ -1828,8 +1820,8 @@ impl<'a> Iterator for HighlightIter<'a> {
             let mut capture = match_.captures[capture_index];
 
             // Remove from the local scope stack any local scopes that have already ended.
-            while range.start > layer.scope_stack.last().unwrap().range.end {
-                layer.scope_stack.pop();
+            while range.start > layer.context.last().unwrap().range.end {
+                layer.context.pop();
             }
 
             // If this capture is for tracking local variables, then process the
@@ -1852,13 +1844,13 @@ impl<'a> Iterator for HighlightIter<'a> {
                                 prop.value.as_ref().map_or(true, |r| r.as_ref() == "true");
                         }
                     }
-                    layer.scope_stack.push(scope);
+                    layer.context.push(scope);
                 }
                 // If the node represents a definition, add a new definition to the
                 // local scope at the top of the scope stack.
                 else if Some(capture.index) == layer.config.local_def_capture_index {
                     reference_highlight = None;
-                    let scope = layer.scope_stack.last_mut().unwrap();
+                    let scope = layer.context.last_mut().unwrap();
 
                     let mut value_range = 0..0;
                     for capture in match_.captures {
@@ -1882,7 +1874,7 @@ impl<'a> Iterator for HighlightIter<'a> {
                 {
                     definition_highlight = None;
                     let name = byte_range_to_str(range.clone(), self.source);
-                    for scope in layer.scope_stack.iter().rev() {
+                    for scope in layer.context.iter().rev() {
                         if let Some(highlight) = scope.local_defs.iter().rev().find_map(|def| {
                             if def.name == name && range.start >= def.value_range.end {
                                 Some(def.highlight)
@@ -2088,9 +2080,9 @@ impl<'a> Iterator for RainbowIter<'a> {
             let capture = match_.captures[capture_index];
 
             // Remove from the rainbow scope stack any rainbow scopes that have already ended.
-            while let Some(scope) = self.rainbow_stack.last() {
+            while let Some(scope) = self.context.rainbow_stack.last() {
                 if range.start >= scope.range.end {
-                    self.rainbow_stack.pop();
+                    self.context.rainbow_stack.pop();
                 } else {
                     break;
                 }
@@ -2102,9 +2094,11 @@ impl<'a> Iterator for RainbowIter<'a> {
                 let scope = RainbowScope {
                     range: range.clone(),
                     node_id: capture.node.id(),
-                    highlight: Highlight(self.rainbow_stack.len() % self.rainbow_length),
+                    highlight: Highlight(
+                        self.context.rainbow_stack.len() % self.context.rainbow_length,
+                    ),
                 };
-                self.rainbow_stack.push(scope);
+                self.context.rainbow_stack.push(scope);
             }
 
             // Otherwise, this capture must represent a highlight.
@@ -2120,7 +2114,7 @@ impl<'a> Iterator for RainbowIter<'a> {
             let mut rainbow_highlight = None;
 
             if Some(capture.index) == layer.config.rainbow_bracket_capture_index {
-                if let Some(scope) = self.rainbow_stack.last() {
+                if let Some(scope) = self.context.rainbow_stack.last() {
                     // Check that the parent of the `@rainbow.bracket` capture is
                     // the `@rainbow.scope` node. This allows us to have bracket
                     // highlights for type parameters/arguments in Rust for example
