@@ -117,7 +117,13 @@ impl EditorView {
             Self::highlight_cursorline(doc, view, surface, theme);
         }
 
-        let highlights = Self::doc_syntax_highlights(doc, view.offset, inner.height, theme);
+        let mut highlights = Self::doc_syntax_highlights(doc, view.offset, inner.height, theme);
+        if editor.config().rainbow_brackets {
+            highlights = Box::new(syntax::merge_iters(
+                highlights,
+                Self::doc_rainbow_highlights(doc, view.offset, inner.height, theme),
+            ));
+        }
         let highlights =
             syntax::merge_iters(highlights, Self::doc_diagnostics_highlights(doc, theme));
         let highlights: Box<dyn Iterator<Item = HighlightEvent>> = if is_focused {
