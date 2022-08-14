@@ -929,7 +929,6 @@ impl Syntax {
                     }],
                     highlight_end_stack: Vec::new(),
                     cursor,
-                    _tree: None,
                     captures,
                     config: layer.config.as_ref(), // TODO: just reuse `layer`
                     depth: layer.depth,            // TODO: just reuse `layer`
@@ -1004,7 +1003,6 @@ impl Syntax {
                     context: (),
                     highlight_end_stack: Vec::new(),
                     cursor,
-                    _tree: None,
                     captures,
                     config: layer.config.as_ref(), // TODO: just reuse `layer`
                     depth: layer.depth,            // TODO: just reuse `layer`
@@ -1332,7 +1330,6 @@ impl<'a> TextProvider<'a> for RopeProvider<'a> {
 }
 
 struct QueryIterLayer<'a, C> {
-    _tree: Option<Tree>, // TODO remove
     cursor: QueryCursor,
     captures: iter::Peekable<QueryCaptures<'a, 'a, RopeProvider<'a>>>,
     config: &'a HighlightConfiguration,
