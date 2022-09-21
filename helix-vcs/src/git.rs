@@ -1,14 +1,50 @@
+use git::sec::trust::DefaultForLevel;
+use git::{Commit, ObjectId, Repository, ThreadSafeRepository};
+use git_repository as git;
 use std::path::Path;
-
-use git_repository::objs::tree::EntryMode;
-use git_repository::{discover, Commit, ObjectId, Repository};
 
 use crate::DiffProvider;
 
+mod repo_cache;
 #[cfg(test)]
 mod test;
 
 pub struct Git;
+
+fn open_repo(path: &Path, ceiling_dir: Option<&Path>) -> Option<ThreadSafeRepository> {
+    // custom open options
+    let mut git_open_opts_map = git::sec::trust::Mapping::<git::open::Options>::default();
+
+    // don't use the global git configs (not needed)
+    let config = git::permissions::Config {
+        system: false,
+        git: false,
+        user: false,
+        env: true,
+        includes: true,
+    };
+    // change options for config permissions without touching anything else
+    git_open_opts_map.reduced = git_open_opts_map.reduced.permissions(git::Permissions {
+        config,
+        ..git::Permissions::default_for_level(git::sec::Trust::Reduced)
+    });
+    git_open_opts_map.full = git_open_opts_map.full.permissions(git::Permissions {
+        config,
+        ..git::Permissions::default_for_level(git::sec::Trust::Full)
+    });
+
+    let mut open_options = git::discover::upwards::Options::default();
+    if let Some(ceiling_dir) = ceiling_dir {
+        open_options.ceiling_dirs = vec![ceiling_dir.to_owned()];
+    }
+
+    ThreadSafeRepository::discover_with_environment_overrides_opts(
+        path,
+        open_options,
+        git_open_opts_map,
+    )
+    .ok()
+}
 
 impl DiffProvider for Git {
     fn get_file_head(&self, file: &Path) -> Option<Vec<u8>> {
@@ -16,7 +52,7 @@ impl DiffProvider for Git {
         debug_assert!(file.is_absolute());
 
         // discover a repository, requires a directory so we call parent (should not fail but exit gracefully in that case)
-        let repo = discover(file.parent()?).ok()?;
+        let repo = git::discover(file.parent()?).ok()?;
         let head = repo.head_commit().ok()?;
         let file_oid = find_file_in_commit(&repo, &head, file)?;
 
@@ -27,6 +63,8 @@ impl DiffProvider for Git {
 
 /// Finds the object that contains the contents of a file at a specific commit.
 fn find_file_in_commit(repo: &Repository, commit: &Commit, file: &Path) -> Option<ObjectId> {
+    use git::objs::tree::EntryMode;
+
     let repo_dir = repo.work_dir()?;
     let rel_path = file.strip_prefix(repo_dir).ok()?;
     let rel_path_components = byte_path_components(rel_path)?;
