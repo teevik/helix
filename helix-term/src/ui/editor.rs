@@ -10,7 +10,7 @@ use helix_core::{
     diagnostic::Severity,
     graphemes::{next_grapheme_boundary, prev_grapheme_boundary},
     movement::Direction,
-    syntax::{self, CharacterHighlightIter, Highlight, HighlightEvent},
+    syntax::{self, CharacterHighlightIter, CharacterRainbowIter, Highlight, HighlightEvent},
     unicode::width::UnicodeWidthStr,
     LineEnding, Position, Range, Selection, Transaction,
 };
@@ -68,6 +68,7 @@ impl EditorView {
     #[allow(clippy::too_many_arguments)]
     fn render_text(
         base: impl Iterator<Item = HighlightEvent>,
+        rainbow_brackes: impl Iterator<Item = syntax::Span>,
         editor: &Editor,
         doc: &Document,
         view: &View,
@@ -76,8 +77,9 @@ impl EditorView {
         surface: &mut Surface,
         is_focused: bool,
     ) {
+        let highlights = syntax::monotonic_overlay(base, rainbow_brackes);
         let highlights =
-            Self::overlay_diagnostics_highlights(base, doc, theme, Some(Severity::Hint));
+            Self::overlay_diagnostics_highlights(highlights, doc, theme, Some(Severity::Hint));
         let highlights =
             Self::overlay_diagnostics_highlights(highlights, doc, theme, Some(Severity::Info));
         let highlights = Self::overlay_diagnostics_highlights(highlights, doc, theme, None);
@@ -162,13 +164,41 @@ impl EditorView {
             Self::highlight_cursorline(doc, view, surface, theme);
         }
 
-        match Self::doc_syntax_highlights(doc, view.offset, inner.height, theme) {
-            DocSyntaxHighlight::TreeSitter(base) => {
-                Self::render_text(base, editor, doc, view, inner, theme, surface, is_focused)
-            }
-            DocSyntaxHighlight::Default(base) => {
-                Self::render_text(base, editor, doc, view, inner, theme, surface, is_focused)
-            }
+        let base_highlights = Self::doc_syntax_highlights(doc, view.offset, inner.height, theme);
+        let bracket_highlights =
+            Self::doc_rainbow_highlights(doc, view.offset, theme, inner.height);
+
+        match (base_highlights, bracket_highlights) {
+            (DocHighlights::TreeSitter(base), Some(highlights)) => Self::render_text(
+                base, highlights, editor, doc, view, inner, theme, surface, is_focused,
+            ),
+            (DocHighlights::TreeSitter(base), None) => Self::render_text(
+                base,
+                iter::empty(),
+                editor,
+                doc,
+                view,
+                inner,
+                theme,
+                surface,
+                is_focused,
+            ),
+
+            (DocHighlights::Default(base), Some(highlights)) => Self::render_text(
+                base, highlights, editor, doc, view, inner, theme, surface, is_focused,
+            ),
+
+            (DocHighlights::Default(base), None) => Self::render_text(
+                base,
+                iter::empty(),
+                editor,
+                doc,
+                view,
+                inner,
+                theme,
+                surface,
+                is_focused,
+            ),
         }
         Self::render_gutter(editor, doc, view, view.area, surface, theme, is_focused);
         Self::render_rulers(editor, doc, view, inner, surface, theme);
@@ -238,7 +268,7 @@ impl EditorView {
         offset: Position,
         height: u16,
         _theme: &Theme,
-    ) -> DocSyntaxHighlight<'doc> {
+    ) -> DocHighlights<'doc> {
         let text = doc.text().slice(..);
         let last_line = std::cmp::min(
             // Saturating subs to make it inclusive zero indexing.
@@ -262,15 +292,63 @@ impl EditorView {
                 let iter = syntax
                     .highlight_iter(text.slice(..), Some(range), None)
                     .to_chars();
-                DocSyntaxHighlight::TreeSitter(iter)
+                DocHighlights::TreeSitter(iter)
             }
             None => {
                 let event = HighlightEvent::Source {
                     start: text.byte_to_char(range.start),
                     end: text.byte_to_char(range.end),
                 };
-                DocSyntaxHighlight::Default(iter::once(event))
+                DocHighlights::Default(iter::once(event))
             }
+        }
+    }
+
+    /// Get rainbow highlights for a document in a view represented by the first line
+    /// and column (`offset`) and the last line.
+    pub fn doc_rainbow_highlights<'doc>(
+        doc: &'doc Document,
+        offset: Position,
+        theme: &Theme,
+        height: u16,
+    ) -> Option<CharacterRainbowIter<'doc>> {
+        let text = doc.text().slice(..);
+        let last_line = std::cmp::min(
+            // Saturating subs to make it inclusive zero indexing.
+            (offset.row + height as usize).saturating_sub(1),
+            doc.text().len_lines().saturating_sub(1),
+        );
+
+        // calculate viewport byte ranges
+        let visible_start = text.line_to_byte(offset.row);
+        let visible_end = text.line_to_byte(last_line + 1);
+
+        match doc.syntax() {
+            Some(syntax) => {
+                // The calculation for the current nesting level for rainbow highlights
+                // depends on where we start the iterator from. For accuracy, we start
+                // the iterator further back than the viewport: at the start of the containing
+                // non-root syntax-tree node. Note that when this iterator is merged with
+                // the syntax highlight iterator, spans which appear out of view are
+                // discarded or truncated.
+                let syntax_node_start = helix_core::syntax::child_for_byte_range(
+                    syntax.tree().root_node(),
+                    visible_start..visible_start,
+                )
+                .map_or(visible_start, |node| node.byte_range().start);
+                let syntax_node_range = syntax_node_start..visible_end;
+
+                let iter = syntax
+                    .rainbow_iter(
+                        text.slice(..),
+                        Some(syntax_node_range),
+                        None,
+                        theme.rainbow_length(),
+                    )
+                    .to_chars();
+                Some(iter)
+            }
+            None => None,
         }
     }
 
@@ -1499,7 +1577,7 @@ fn canonicalize_key(key: &mut KeyEvent) {
     }
 }
 
-pub enum DocSyntaxHighlight<'d> {
+pub enum DocHighlights<'d> {
     TreeSitter(CharacterHighlightIter<'d>),
     Default(iter::Once<HighlightEvent>),
 }
