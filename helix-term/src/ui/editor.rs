@@ -122,7 +122,7 @@ impl EditorView {
         let mut highlights = Self::doc_syntax_highlights(doc, view.offset, inner.height, theme);
         for diagnostic in Self::doc_diagnostics_highlights(doc, theme) {
             if !diagnostic.is_empty() {
-                highlights = Box::new(syntax::merge(highlights, diagnostic));
+                highlights = Box::new(syntax::overlay(highlights, diagnostic.into_iter()));
             }
         }
         let highlights: Box<dyn Iterator<Item = HighlightEvent>> = if is_focused {
@@ -265,20 +265,16 @@ impl EditorView {
     }
 
     /// Get highlight spans for document diagnostics
-    pub fn doc_diagnostics_highlights(
-        doc: &Document,
-        theme: &Theme,
-    ) -> [Vec<(usize, std::ops::Range<usize>)>; 5] {
+    pub fn doc_diagnostics_highlights(doc: &Document, theme: &Theme) -> [Vec<syntax::Span>; 5] {
         use helix_core::diagnostic::Severity;
-        fn merge_or_push(
-            vec: &mut Vec<(usize, std::ops::Range<usize>)>,
-            scope: usize,
-            start: usize,
-            end: usize,
-        ) {
+        fn merge_or_push(vec: &mut Vec<syntax::Span>, scope: usize, start: usize, end: usize) {
             match vec.last_mut() {
-                Some((_, range)) if start <= range.end => range.end = end.max(range.end),
-                _ => vec.push((scope, start..end)),
+                Some(span) if start <= span.end => span.end = end.max(span.end),
+                _ => vec.push(syntax::Span {
+                    scope: syntax::Highlight(scope),
+                    start,
+                    end,
+                }),
             }
         }
 
