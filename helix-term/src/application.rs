@@ -278,6 +278,8 @@ impl Application {
         #[cfg(feature = "integration")]
         let mut idle_handled = false;
 
+        let mut iterations: usize = 0;
+
         loop {
             if self.editor.should_close() {
                 return false;
@@ -301,6 +303,7 @@ impl Application {
 
                     if last || self.last_render.elapsed() > LSP_DEADLINE {
                         self.render();
+                        iterations = iterations.saturating_add(1);
                         self.last_render = Instant::now();
                     }
                 }
@@ -308,19 +311,23 @@ impl Application {
                     let needs_render = self.editor.handle_debugger_message(payload).await;
                     if needs_render {
                         self.render();
+                        iterations = iterations.saturating_add(1);
                     }
                 }
                 Some(config_event) = self.editor.config_events.1.recv() => {
                     self.handle_config_events(config_event);
                     self.render();
+                    iterations = iterations.saturating_add(1);
                 }
                 Some(callback) = self.jobs.futures.next() => {
                     self.jobs.handle_callback(&mut self.editor, &mut self.compositor, callback);
                     self.render();
+                    iterations = iterations.saturating_add(1);
                 }
                 Some(callback) = self.jobs.wait_futures.next() => {
                     self.jobs.handle_callback(&mut self.editor, &mut self.compositor, callback);
                     self.render();
+                    iterations = iterations.saturating_add(1);
                 }
                 _ = &mut self.editor.idle_timer => {
                     // idle timeout
@@ -331,6 +338,15 @@ impl Application {
                     {
                         idle_handled = true;
                     }
+                }
+                _ = &mut self.editor.frame_timer => {
+                    log::warn!("🏎️: {}", iterations);
+                    self.editor.frame_timer.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(1));
+                    iterations = 0;
+                }
+                _ = &mut self.editor.immediate_timer => {
+                    self.render();
+                    iterations = iterations.saturating_add(1);
                 }
             }
 

@@ -676,6 +676,8 @@ pub struct Editor {
     pub auto_pairs: Option<AutoPairs>,
 
     pub idle_timer: Pin<Box<Sleep>>,
+    pub immediate_timer: Pin<Box<Sleep>>,
+    pub frame_timer: Pin<Box<Sleep>>,
     pub last_motion: Option<Motion>,
 
     pub last_completion: Option<CompleteAction>,
@@ -755,6 +757,8 @@ impl Editor {
             status_msg: None,
             autoinfo: None,
             idle_timer: Box::pin(sleep(conf.idle_timeout)),
+            immediate_timer: Box::pin(sleep(Duration::from_millis(1))),
+            frame_timer: Box::pin(sleep(Duration::from_secs(1))),
             last_motion: None,
             last_completion: None,
             config,
