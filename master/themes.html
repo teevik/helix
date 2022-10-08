@@ -203,6 +203,17 @@ over it and is merged into the default palette.</p>
 <tr><td><code>crossed_out</code></td></tr>
 </tbody></table>
 </div>
+<h3 id="inheritance"><a class="header" href="#inheritance">Inheritance</a></h3>
+<p>Extend upon other themes by setting the <code>inherits</code> property to an existing theme.</p>
+<pre><code class="language-toml">inherits = &quot;boo_berry&quot;
+
+# Override the theming for &quot;keyword&quot;s:
+&quot;keyword&quot; = { fg = &quot;gold&quot; }
+
+# Override colors in the palette:
+[palette]
+berry = &quot;#2A2A4D&quot;
+</code></pre>
 <h3 id="scopes"><a class="header" href="#scopes">Scopes</a></h3>
 <p>The following is a list of scopes available to use for styling.</p>
 <h4 id="syntax-highlighting"><a class="header" href="#syntax-highlighting">Syntax highlighting</a></h4>
@@ -417,6 +428,8 @@ over it and is merged into the default palette.</p>
 <tr><td><code>ui.cursor.select</code></td><td></td></tr>
 <tr><td><code>ui.cursor.match</code></td><td>Matching bracket etc.</td></tr>
 <tr><td><code>ui.cursor.primary</code></td><td>Cursor with primary selection</td></tr>
+<tr><td><code>ui.gutter</code></td><td>Gutter</td></tr>
+<tr><td><code>ui.gutter.selected</code></td><td>Gutter for the line the cursor is on</td></tr>
 <tr><td><code>ui.linenr</code></td><td>Line numbers</td></tr>
 <tr><td><code>ui.linenr.selected</code></td><td>Line number for the line the cursor is on</td></tr>
 <tr><td><code>ui.statusline</code></td><td>Statusline</td></tr>
@@ -453,6 +466,10 @@ over it and is merged into the default palette.</p>
 <tr><td><code>diagnostic.error</code></td><td>Diagnostics error (editing area)</td></tr>
 </tbody></table>
 </div>
+<p>You can check compliance to spec with</p>
+<pre><code class="language-shell">cargo xtask themelint onedark  # replace onedark with &lt;name&gt;
+</code></pre>
+
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">

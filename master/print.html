@@ -417,8 +417,8 @@ and therefore requires the corresponding query file to work properly.</p>
 <tr><td><code>Alt-`</code></td><td>Set the selected text to upper case</td><td><code>switch_to_uppercase</code></td></tr>
 <tr><td><code>i</code></td><td>Insert before selection</td><td><code>insert_mode</code></td></tr>
 <tr><td><code>a</code></td><td>Insert after selection (append)</td><td><code>append_mode</code></td></tr>
-<tr><td><code>I</code></td><td>Insert at the start of the line</td><td><code>prepend_to_line</code></td></tr>
-<tr><td><code>A</code></td><td>Insert at the end of the line</td><td><code>append_to_line</code></td></tr>
+<tr><td><code>I</code></td><td>Insert at the start of the line</td><td><code>insert_at_line_start</code></td></tr>
+<tr><td><code>A</code></td><td>Insert at the end of the line</td><td><code>insert_at_line_end</code></td></tr>
 <tr><td><code>o</code></td><td>Open new line below selection</td><td><code>open_below</code></td></tr>
 <tr><td><code>O</code></td><td>Open new line above selection</td><td><code>open_above</code></td></tr>
 <tr><td><code>.</code></td><td>Repeat last insert</td><td>N/A</td></tr>
@@ -475,6 +475,7 @@ and therefore requires the corresponding query file to work properly.</p>
 <tr><td><code>X</code></td><td>Extend selection to line bounds (line-wise selection)</td><td><code>extend_to_line_bounds</code></td></tr>
 <tr><td><code>Alt-x</code></td><td>Shrink selection to line bounds (line-wise selection)</td><td><code>shrink_to_line_bounds</code></td></tr>
 <tr><td><code>J</code></td><td>Join lines inside selection</td><td><code>join_selections</code></td></tr>
+<tr><td><code>A-J</code></td><td>Join lines inside selection and select space</td><td><code>join_selections_space</code></td></tr>
 <tr><td><code>K</code></td><td>Keep selections matching the regex</td><td><code>keep_selections</code></td></tr>
 <tr><td><code>Alt-K</code></td><td>Remove selections matching the regex</td><td><code>remove_selections</code></td></tr>
 <tr><td><code>Ctrl-c</code></td><td>Comment/uncomment the selections</td><td><code>toggle_comments</code></td></tr>
@@ -640,7 +641,7 @@ and <a href="./usage.html#textobject">textobject</a> usage.</p>
 <tr><td><code>]space</code></td><td>Add newline below</td><td><code>add_newline_below</code></td></tr>
 </tbody></table>
 </div>
-<h2 id="insert-mode"><a class="header" href="#insert-mode">Insert Mode</a></h2>
+<h2 id="insert-mode"><a class="header" href="#insert-mode">Insert mode</a></h2>
 <p>Insert mode bindings are somewhat minimal by default. Helix is designed to
 be a modal editor, and this is reflected in the user experience and internal
 mechanics. For example, changes to the text are only saved for undos when
@@ -649,40 +650,42 @@ strongly encouraged to learn the modal editing paradigm to get the smoothest
 experience.</p>
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Command</th></tr></thead><tbody>
 <tr><td><code>Escape</code></td><td>Switch to normal mode</td><td><code>normal_mode</code></td></tr>
+<tr><td><code>Ctrl-s</code></td><td>Commit undo checkpoint</td><td><code>commit_undo_checkpoint</code></td></tr>
 <tr><td><code>Ctrl-x</code></td><td>Autocomplete</td><td><code>completion</code></td></tr>
 <tr><td><code>Ctrl-r</code></td><td>Insert a register content</td><td><code>insert_register</code></td></tr>
-<tr><td><code>Ctrl-w</code>, <code>Alt-Backspace</code>, <code>Ctrl-Backspace</code></td><td>Delete previous word</td><td><code>delete_word_backward</code></td></tr>
-<tr><td><code>Alt-d</code>, <code>Alt-Delete</code>, <code>Ctrl-Delete</code></td><td>Delete next word</td><td><code>delete_word_forward</code></td></tr>
+<tr><td><code>Ctrl-w</code>, <code>Alt-Backspace</code></td><td>Delete previous word</td><td><code>delete_word_backward</code></td></tr>
+<tr><td><code>Alt-d</code>, <code>Alt-Delete</code></td><td>Delete next word</td><td><code>delete_word_forward</code></td></tr>
 <tr><td><code>Ctrl-u</code></td><td>Delete to start of line</td><td><code>kill_to_line_start</code></td></tr>
 <tr><td><code>Ctrl-k</code></td><td>Delete to end of line</td><td><code>kill_to_line_end</code></td></tr>
+<tr><td><code>Ctrl-h</code>, <code>Backspace</code></td><td>Delete previous char</td><td><code>delete_char_backward</code></td></tr>
+<tr><td><code>Ctrl-d</code>, <code>Delete</code></td><td>Delete next char</td><td><code>delete_char_forward</code></td></tr>
 <tr><td><code>Ctrl-j</code>, <code>Enter</code></td><td>Insert new line</td><td><code>insert_newline</code></td></tr>
-<tr><td><code>Backspace</code>, <code>Ctrl-h</code></td><td>Delete previous char</td><td><code>delete_char_backward</code></td></tr>
-<tr><td><code>Delete</code>, <code>Ctrl-d</code></td><td>Delete next char</td><td><code>delete_char_forward</code></td></tr>
 </tbody></table>
 </div>
-<p>However, if you really want navigation in insert mode, this is supported. An
-example config that gives the ability to use arrow keys while still in insert
-mode:</p>
+<p>These keys are not recommended, but are included for new users less familiar
+with modal editors.</p>
+<div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Command</th></tr></thead><tbody>
+<tr><td><code>Up</code></td><td>Move to previous line</td><td><code>move_line_up</code></td></tr>
+<tr><td><code>Down</code></td><td>Move to next line</td><td><code>move_line_down</code></td></tr>
+<tr><td><code>Left</code></td><td>Backward a char</td><td><code>move_char_left</code></td></tr>
+<tr><td><code>Right</code></td><td>Forward a char</td><td><code>move_char_right</code></td></tr>
+<tr><td><code>PageUp</code></td><td>Move one page up</td><td><code>page_up</code></td></tr>
+<tr><td><code>PageDown</code></td><td>Move one page down</td><td><code>page_down</code></td></tr>
+<tr><td><code>Home</code></td><td>Move to line start</td><td><code>goto_line_start</code></td></tr>
+<tr><td><code>End</code></td><td>Move to line end</td><td><code>goto_line_end_newline</code></td></tr>
+</tbody></table>
+</div>
+<p>If you want to disable them in insert mode as you become more comfortable with modal editing, you can use
+the following in your <code>config.toml</code>:</p>
 <pre><code class="language-toml">[keys.insert]
-&quot;up&quot; = &quot;move_line_up&quot;
-&quot;down&quot; = &quot;move_line_down&quot;
-&quot;left&quot; = &quot;move_char_left&quot;
-&quot;right&quot; = &quot;move_char_right&quot;
-&quot;C-b&quot; = &quot;move_char_left&quot;
-&quot;C-f&quot; = &quot;move_char_right&quot;
-&quot;A-b&quot; = &quot;move_prev_word_end&quot;
-&quot;C-left&quot; = &quot;move_prev_word_end&quot;
-&quot;A-f&quot; = &quot;move_next_word_start&quot;
-&quot;C-right&quot; = &quot;move_next_word_start&quot;
-&quot;A-&lt;&quot; = &quot;goto_file_start&quot;
-&quot;A-&gt;&quot; = &quot;goto_file_end&quot;
-&quot;pageup&quot; = &quot;page_up&quot;
-&quot;pagedown&quot; = &quot;page_down&quot;
-&quot;home&quot; = &quot;goto_line_start&quot;
-&quot;C-a&quot; = &quot;goto_line_start&quot;
-&quot;end&quot; = &quot;goto_line_end_newline&quot;
-&quot;C-e&quot; = &quot;goto_line_end_newline&quot;
-&quot;A-left&quot; = &quot;goto_line_start&quot;
+up = &quot;no_op&quot;
+down = &quot;no_op&quot;
+left = &quot;no_op&quot;
+right = &quot;no_op&quot;
+pageup = &quot;no_op&quot;
+pagedown = &quot;no_op&quot;
+home = &quot;no_op&quot;
+end = &quot;no_op&quot;
 </code></pre>
 <h2 id="select--extend-mode"><a class="header" href="#select--extend-mode">Select / extend mode</a></h2>
 <p>This mode echoes Normal mode, but changes any movements to extend
@@ -697,9 +700,9 @@ you to selectively add search terms to your selections.</p>
 <h2 id="picker"><a class="header" href="#picker">Picker</a></h2>
 <p>Keys to use within picker. Remapping currently not supported.</p>
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>Tab</code>, <code>Up</code>, <code>Ctrl-p</code></td><td>Previous entry</td></tr>
+<tr><td><code>Shift-Tab</code>, <code>Up</code>, <code>Ctrl-p</code></td><td>Previous entry</td></tr>
+<tr><td><code>Tab</code>, <code>Down</code>, <code>Ctrl-n</code></td><td>Next entry</td></tr>
 <tr><td><code>PageUp</code>, <code>Ctrl-u</code></td><td>Page up</td></tr>
-<tr><td><code>Shift-tab</code>, <code>Down</code>, <code>Ctrl-n</code></td><td>Next entry</td></tr>
 <tr><td><code>PageDown</code>, <code>Ctrl-d</code></td><td>Page down</td></tr>
 <tr><td><code>Home</code></td><td>Go to first entry</td></tr>
 <tr><td><code>End</code></td><td>Go to last entry</td></tr>
@@ -782,6 +785,7 @@ you to selectively add search terms to your selections.</p>
 <tr><td><code>:show-directory</code>, <code>:pwd</code></td><td>Show the current working directory.</td></tr>
 <tr><td><code>:encoding</code></td><td>Set encoding. Based on <code>https://encoding.spec.whatwg.org</code>.</td></tr>
 <tr><td><code>:reload</code></td><td>Discard changes and reload from the source file.</td></tr>
+<tr><td><code>:lsp-restart</code></td><td>Restarts the Language Server that is in use by the current doc</td></tr>
 <tr><td><code>:tree-sitter-scopes</code></td><td>Display tree sitter scopes, primarily for theming and development.</td></tr>
 <tr><td><code>:debug-start</code>, <code>:dbg</code></td><td>Start a debug session from a given template with given parameters.</td></tr>
 <tr><td><code>:debug-remote</code>, <code>:dbg-tcp</code></td><td>Connect to a debug adapter by TCP address and start a debugging session from a given template with given parameters.</td></tr>
@@ -818,6 +822,7 @@ Languages</a> guide for more language configuration information.</p>
 <tr><td>astro</td><td>✓</td><td></td><td></td><td></td></tr>
 <tr><td>awk</td><td>✓</td><td>✓</td><td></td><td><code>awk-language-server</code></td></tr>
 <tr><td>bash</td><td>✓</td><td></td><td></td><td><code>bash-language-server</code></td></tr>
+<tr><td>bass</td><td>✓</td><td></td><td></td><td><code>bass</code></td></tr>
 <tr><td>beancount</td><td>✓</td><td></td><td></td><td></td></tr>
 <tr><td>c</td><td>✓</td><td>✓</td><td>✓</td><td><code>clangd</code></td></tr>
 <tr><td>c-sharp</td><td>✓</td><td>✓</td><td></td><td><code>OmniSharp</code></td></tr>
@@ -933,6 +938,8 @@ Languages</a> guide for more language configuration information.</p>
 <tr><td>vala</td><td>✓</td><td></td><td></td><td><code>vala-language-server</code></td></tr>
 <tr><td>verilog</td><td>✓</td><td>✓</td><td></td><td><code>svlangserver</code></td></tr>
 <tr><td>vue</td><td>✓</td><td></td><td></td><td><code>vls</code></td></tr>
+<tr><td>wast</td><td>✓</td><td></td><td></td><td></td></tr>
+<tr><td>wat</td><td>✓</td><td></td><td></td><td></td></tr>
 <tr><td>wgsl</td><td>✓</td><td></td><td></td><td><code>wgsl_analyzer</code></td></tr>
 <tr><td>xit</td><td>✓</td><td></td><td></td><td></td></tr>
 <tr><td>yaml</td><td>✓</td><td></td><td>✓</td><td><code>yaml-language-server</code></td></tr>
@@ -975,10 +982,13 @@ hidden = false
 </code></pre>
 <p>You may also specify a file to use for configuration with the <code>-c</code> or
 <code>--config</code> CLI argument: <code>hx -c path/to/custom-config.toml</code>.</p>
+<p>It is also possible to trigger configuration file reloading by sending the <code>USR1</code>
+signal to the helix process, e.g. via <code>pkill -USR1 hx</code>. This is only supported 
+on unix operating systems.</p>
 <h2 id="editor"><a class="header" href="#editor">Editor</a></h2>
 <h3 id="editor-section"><a class="header" href="#editor-section"><code>[editor]</code> Section</a></h3>
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Default</th></tr></thead><tbody>
-<tr><td><code>scrolloff</code></td><td>Number of lines of padding around the edge of the screen when scrolling.</td><td><code>3</code></td></tr>
+<tr><td><code>scrolloff</code></td><td>Number of lines of padding around the edge of the screen when scrolling.</td><td><code>5</code></td></tr>
 <tr><td><code>mouse</code></td><td>Enable mouse mode.</td><td><code>true</code></td></tr>
 <tr><td><code>middle-click-paste</code></td><td>Middle click paste support.</td><td><code>true</code></td></tr>
 <tr><td><code>scroll-lines</code></td><td>Number of lines to scroll per scroll wheel step.</td><td><code>3</code></td></tr>
@@ -1007,14 +1017,29 @@ left = [&quot;mode&quot;, &quot;spinner&quot;]
 center = [&quot;file-name&quot;]
 right = [&quot;diagnostics&quot;, &quot;selections&quot;, &quot;position&quot;, &quot;file-encoding&quot;, &quot;file-line-ending&quot;, &quot;file-type&quot;]
 separator = &quot;│&quot;
+mode.normal = &quot;NORMAL&quot;
+mode.insert = &quot;INSERT&quot;
+mode.select = &quot;SELECT&quot;
 </code></pre>
-<p>The following elements can be configured:</p>
+<p>The <code>[editor.statusline]</code> key takes the following sub-keys:</p>
+<div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Default</th></tr></thead><tbody>
+<tr><td><code>left</code></td><td>A list of elements aligned to the left of the statusline</td><td><code>[&quot;mode&quot;, &quot;spinner&quot;, &quot;file-name&quot;]</code></td></tr>
+<tr><td><code>center</code></td><td>A list of elements aligned to the middle of the statusline</td><td><code>[]</code></td></tr>
+<tr><td><code>right</code></td><td>A list of elements aligned to the right of the statusline</td><td><code>[&quot;diagnostics&quot;, &quot;selections&quot;, &quot;position&quot;, &quot;file-encoding&quot;]</code></td></tr>
+<tr><td><code>separator</code></td><td>The character used to separate elements in the statusline</td><td><code>&quot;│&quot;</code></td></tr>
+<tr><td><code>mode.normal</code></td><td>The text shown in the <code>mode</code> element for normal mode</td><td><code>&quot;NOR&quot;</code></td></tr>
+<tr><td><code>mode.insert</code></td><td>The text shown in the <code>mode</code> element for insert mode</td><td><code>&quot;INS&quot;</code></td></tr>
+<tr><td><code>mode.select</code></td><td>The text shown in the <code>mode</code> element for select mode</td><td><code>&quot;SEL&quot;</code></td></tr>
+</tbody></table>
+</div>
+<p>The following statusline elements can be configured:</p>
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>mode</code></td><td>The current editor mode (<code>NOR</code>/<code>INS</code>/<code>SEL</code>)</td></tr>
+<tr><td><code>mode</code></td><td>The current editor mode (<code>mode.normal</code>/<code>mode.insert</code>/<code>mode.select</code>)</td></tr>
 <tr><td><code>spinner</code></td><td>A progress spinner indicating LSP activity</td></tr>
 <tr><td><code>file-name</code></td><td>The path/name of the opened file</td></tr>
 <tr><td><code>file-encoding</code></td><td>The encoding of the opened file if it differs from UTF-8</td></tr>
 <tr><td><code>file-line-ending</code></td><td>The file line endings (CRLF or LF)</td></tr>
+<tr><td><code>total-line-numbers</code></td><td>The total line numbers of the opened file</td></tr>
 <tr><td><code>file-type</code></td><td>The type of the opened file</td></tr>
 <tr><td><code>diagnostics</code></td><td>The number of warnings and/or errors</td></tr>
 <tr><td><code>selections</code></td><td>The number of active selections</td></tr>
@@ -1128,12 +1153,14 @@ tabpad = &quot;·&quot; # Tabs will look like &quot;→···&quot; (depending o
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Default</th></tr></thead><tbody>
 <tr><td><code>render</code></td><td>Whether to render indent guides.</td><td><code>false</code></td></tr>
 <tr><td><code>character</code></td><td>Literal character to use for rendering the indent guide</td><td><code>│</code></td></tr>
+<tr><td><code>skip-levels</code></td><td>Number of indent levels to skip</td><td><code>0</code></td></tr>
 </tbody></table>
 </div>
 <p>Example:</p>
 <pre><code class="language-toml">[editor.indent-guides]
 render = true
 character = &quot;╎&quot;
+skip-levels = 1
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="themes"><a class="header" href="#themes">Themes</a></h1>
 <p>To use a theme add <code>theme = &quot;&lt;name&gt;&quot;</code> to your <a href="./configuration.html"><code>config.toml</code></a> at the very top of the file before the first section or select it during runtime using <code>:theme &lt;name&gt;</code>.</p>
@@ -1201,6 +1228,17 @@ over it and is merged into the default palette.</p>
 <tr><td><code>crossed_out</code></td></tr>
 </tbody></table>
 </div>
+<h3 id="inheritance"><a class="header" href="#inheritance">Inheritance</a></h3>
+<p>Extend upon other themes by setting the <code>inherits</code> property to an existing theme.</p>
+<pre><code class="language-toml">inherits = &quot;boo_berry&quot;
+
+# Override the theming for &quot;keyword&quot;s:
+&quot;keyword&quot; = { fg = &quot;gold&quot; }
+
+# Override colors in the palette:
+[palette]
+berry = &quot;#2A2A4D&quot;
+</code></pre>
 <h3 id="scopes"><a class="header" href="#scopes">Scopes</a></h3>
 <p>The following is a list of scopes available to use for styling.</p>
 <h4 id="syntax-highlighting"><a class="header" href="#syntax-highlighting">Syntax highlighting</a></h4>
@@ -1415,6 +1453,8 @@ over it and is merged into the default palette.</p>
 <tr><td><code>ui.cursor.select</code></td><td></td></tr>
 <tr><td><code>ui.cursor.match</code></td><td>Matching bracket etc.</td></tr>
 <tr><td><code>ui.cursor.primary</code></td><td>Cursor with primary selection</td></tr>
+<tr><td><code>ui.gutter</code></td><td>Gutter</td></tr>
+<tr><td><code>ui.gutter.selected</code></td><td>Gutter for the line the cursor is on</td></tr>
 <tr><td><code>ui.linenr</code></td><td>Line numbers</td></tr>
 <tr><td><code>ui.linenr.selected</code></td><td>Line number for the line the cursor is on</td></tr>
 <tr><td><code>ui.statusline</code></td><td>Statusline</td></tr>
@@ -1450,7 +1490,11 @@ over it and is merged into the default palette.</p>
 <tr><td><code>diagnostic.warning</code></td><td>Diagnostics warning (editing area)</td></tr>
 <tr><td><code>diagnostic.error</code></td><td>Diagnostics error (editing area)</td></tr>
 </tbody></table>
-</div><div style="break-before: page; page-break-before: always;"></div><h1 id="key-remapping"><a class="header" href="#key-remapping">Key Remapping</a></h1>
+</div>
+<p>You can check compliance to spec with</p>
+<pre><code class="language-shell">cargo xtask themelint onedark  # replace onedark with &lt;name&gt;
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="key-remapping"><a class="header" href="#key-remapping">Key Remapping</a></h1>
 <p>One-way key remapping is temporarily supported via a simple TOML configuration
 file. (More powerful solutions such as rebinding via commands will be
 available in the future).</p>
@@ -1550,6 +1594,7 @@ formatter = { command = &quot;mylang-formatter&quot; , args = [&quot;--stdin&quo
 <tr><td><code>config</code></td><td>Language Server configuration</td></tr>
 <tr><td><code>grammar</code></td><td>The tree-sitter grammar to use (defaults to the value of <code>name</code>)</td></tr>
 <tr><td><code>formatter</code></td><td>The formatter for the language, it will take precedence over the lsp when defined. The formatter must be able to take the original file as input from stdin and write the formatted file to stdout</td></tr>
+<tr><td><code>max-line-length</code></td><td>Maximum line length. Used for the <code>:reflow</code> command</td></tr>
 </tbody></table>
 </div>
 <h3 id="language-server-configuration"><a class="header" href="#language-server-configuration">Language Server configuration</a></h3>

@@ -218,8 +218,8 @@
 <tr><td><code>Alt-`</code></td><td>Set the selected text to upper case</td><td><code>switch_to_uppercase</code></td></tr>
 <tr><td><code>i</code></td><td>Insert before selection</td><td><code>insert_mode</code></td></tr>
 <tr><td><code>a</code></td><td>Insert after selection (append)</td><td><code>append_mode</code></td></tr>
-<tr><td><code>I</code></td><td>Insert at the start of the line</td><td><code>prepend_to_line</code></td></tr>
-<tr><td><code>A</code></td><td>Insert at the end of the line</td><td><code>append_to_line</code></td></tr>
+<tr><td><code>I</code></td><td>Insert at the start of the line</td><td><code>insert_at_line_start</code></td></tr>
+<tr><td><code>A</code></td><td>Insert at the end of the line</td><td><code>insert_at_line_end</code></td></tr>
 <tr><td><code>o</code></td><td>Open new line below selection</td><td><code>open_below</code></td></tr>
 <tr><td><code>O</code></td><td>Open new line above selection</td><td><code>open_above</code></td></tr>
 <tr><td><code>.</code></td><td>Repeat last insert</td><td>N/A</td></tr>
@@ -276,6 +276,7 @@
 <tr><td><code>X</code></td><td>Extend selection to line bounds (line-wise selection)</td><td><code>extend_to_line_bounds</code></td></tr>
 <tr><td><code>Alt-x</code></td><td>Shrink selection to line bounds (line-wise selection)</td><td><code>shrink_to_line_bounds</code></td></tr>
 <tr><td><code>J</code></td><td>Join lines inside selection</td><td><code>join_selections</code></td></tr>
+<tr><td><code>A-J</code></td><td>Join lines inside selection and select space</td><td><code>join_selections_space</code></td></tr>
 <tr><td><code>K</code></td><td>Keep selections matching the regex</td><td><code>keep_selections</code></td></tr>
 <tr><td><code>Alt-K</code></td><td>Remove selections matching the regex</td><td><code>remove_selections</code></td></tr>
 <tr><td><code>Ctrl-c</code></td><td>Comment/uncomment the selections</td><td><code>toggle_comments</code></td></tr>
@@ -441,7 +442,7 @@ and <a href="./usage.html#textobject">textobject</a> usage.</p>
 <tr><td><code>]space</code></td><td>Add newline below</td><td><code>add_newline_below</code></td></tr>
 </tbody></table>
 </div>
-<h2 id="insert-mode"><a class="header" href="#insert-mode">Insert Mode</a></h2>
+<h2 id="insert-mode"><a class="header" href="#insert-mode">Insert mode</a></h2>
 <p>Insert mode bindings are somewhat minimal by default. Helix is designed to
 be a modal editor, and this is reflected in the user experience and internal
 mechanics. For example, changes to the text are only saved for undos when
@@ -450,40 +451,42 @@ strongly encouraged to learn the modal editing paradigm to get the smoothest
 experience.</p>
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Command</th></tr></thead><tbody>
 <tr><td><code>Escape</code></td><td>Switch to normal mode</td><td><code>normal_mode</code></td></tr>
+<tr><td><code>Ctrl-s</code></td><td>Commit undo checkpoint</td><td><code>commit_undo_checkpoint</code></td></tr>
 <tr><td><code>Ctrl-x</code></td><td>Autocomplete</td><td><code>completion</code></td></tr>
 <tr><td><code>Ctrl-r</code></td><td>Insert a register content</td><td><code>insert_register</code></td></tr>
-<tr><td><code>Ctrl-w</code>, <code>Alt-Backspace</code>, <code>Ctrl-Backspace</code></td><td>Delete previous word</td><td><code>delete_word_backward</code></td></tr>
-<tr><td><code>Alt-d</code>, <code>Alt-Delete</code>, <code>Ctrl-Delete</code></td><td>Delete next word</td><td><code>delete_word_forward</code></td></tr>
+<tr><td><code>Ctrl-w</code>, <code>Alt-Backspace</code></td><td>Delete previous word</td><td><code>delete_word_backward</code></td></tr>
+<tr><td><code>Alt-d</code>, <code>Alt-Delete</code></td><td>Delete next word</td><td><code>delete_word_forward</code></td></tr>
 <tr><td><code>Ctrl-u</code></td><td>Delete to start of line</td><td><code>kill_to_line_start</code></td></tr>
 <tr><td><code>Ctrl-k</code></td><td>Delete to end of line</td><td><code>kill_to_line_end</code></td></tr>
+<tr><td><code>Ctrl-h</code>, <code>Backspace</code></td><td>Delete previous char</td><td><code>delete_char_backward</code></td></tr>
+<tr><td><code>Ctrl-d</code>, <code>Delete</code></td><td>Delete next char</td><td><code>delete_char_forward</code></td></tr>
 <tr><td><code>Ctrl-j</code>, <code>Enter</code></td><td>Insert new line</td><td><code>insert_newline</code></td></tr>
-<tr><td><code>Backspace</code>, <code>Ctrl-h</code></td><td>Delete previous char</td><td><code>delete_char_backward</code></td></tr>
-<tr><td><code>Delete</code>, <code>Ctrl-d</code></td><td>Delete next char</td><td><code>delete_char_forward</code></td></tr>
 </tbody></table>
 </div>
-<p>However, if you really want navigation in insert mode, this is supported. An
-example config that gives the ability to use arrow keys while still in insert
-mode:</p>
+<p>These keys are not recommended, but are included for new users less familiar
+with modal editors.</p>
+<div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th><th>Command</th></tr></thead><tbody>
+<tr><td><code>Up</code></td><td>Move to previous line</td><td><code>move_line_up</code></td></tr>
+<tr><td><code>Down</code></td><td>Move to next line</td><td><code>move_line_down</code></td></tr>
+<tr><td><code>Left</code></td><td>Backward a char</td><td><code>move_char_left</code></td></tr>
+<tr><td><code>Right</code></td><td>Forward a char</td><td><code>move_char_right</code></td></tr>
+<tr><td><code>PageUp</code></td><td>Move one page up</td><td><code>page_up</code></td></tr>
+<tr><td><code>PageDown</code></td><td>Move one page down</td><td><code>page_down</code></td></tr>
+<tr><td><code>Home</code></td><td>Move to line start</td><td><code>goto_line_start</code></td></tr>
+<tr><td><code>End</code></td><td>Move to line end</td><td><code>goto_line_end_newline</code></td></tr>
+</tbody></table>
+</div>
+<p>If you want to disable them in insert mode as you become more comfortable with modal editing, you can use
+the following in your <code>config.toml</code>:</p>
 <pre><code class="language-toml">[keys.insert]
-&quot;up&quot; = &quot;move_line_up&quot;
-&quot;down&quot; = &quot;move_line_down&quot;
-&quot;left&quot; = &quot;move_char_left&quot;
-&quot;right&quot; = &quot;move_char_right&quot;
-&quot;C-b&quot; = &quot;move_char_left&quot;
-&quot;C-f&quot; = &quot;move_char_right&quot;
-&quot;A-b&quot; = &quot;move_prev_word_end&quot;
-&quot;C-left&quot; = &quot;move_prev_word_end&quot;
-&quot;A-f&quot; = &quot;move_next_word_start&quot;
-&quot;C-right&quot; = &quot;move_next_word_start&quot;
-&quot;A-&lt;&quot; = &quot;goto_file_start&quot;
-&quot;A-&gt;&quot; = &quot;goto_file_end&quot;
-&quot;pageup&quot; = &quot;page_up&quot;
-&quot;pagedown&quot; = &quot;page_down&quot;
-&quot;home&quot; = &quot;goto_line_start&quot;
-&quot;C-a&quot; = &quot;goto_line_start&quot;
-&quot;end&quot; = &quot;goto_line_end_newline&quot;
-&quot;C-e&quot; = &quot;goto_line_end_newline&quot;
-&quot;A-left&quot; = &quot;goto_line_start&quot;
+up = &quot;no_op&quot;
+down = &quot;no_op&quot;
+left = &quot;no_op&quot;
+right = &quot;no_op&quot;
+pageup = &quot;no_op&quot;
+pagedown = &quot;no_op&quot;
+home = &quot;no_op&quot;
+end = &quot;no_op&quot;
 </code></pre>
 <h2 id="select--extend-mode"><a class="header" href="#select--extend-mode">Select / extend mode</a></h2>
 <p>This mode echoes Normal mode, but changes any movements to extend
@@ -498,9 +501,9 @@ you to selectively add search terms to your selections.</p>
 <h2 id="picker"><a class="header" href="#picker">Picker</a></h2>
 <p>Keys to use within picker. Remapping currently not supported.</p>
 <div class="table-wrapper"><table><thead><tr><th>Key</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>Tab</code>, <code>Up</code>, <code>Ctrl-p</code></td><td>Previous entry</td></tr>
+<tr><td><code>Shift-Tab</code>, <code>Up</code>, <code>Ctrl-p</code></td><td>Previous entry</td></tr>
+<tr><td><code>Tab</code>, <code>Down</code>, <code>Ctrl-n</code></td><td>Next entry</td></tr>
 <tr><td><code>PageUp</code>, <code>Ctrl-u</code></td><td>Page up</td></tr>
-<tr><td><code>Shift-tab</code>, <code>Down</code>, <code>Ctrl-n</code></td><td>Next entry</td></tr>
 <tr><td><code>PageDown</code>, <code>Ctrl-d</code></td><td>Page down</td></tr>
 <tr><td><code>Home</code></td><td>Go to first entry</td></tr>
 <tr><td><code>End</code></td><td>Go to last entry</td></tr>
