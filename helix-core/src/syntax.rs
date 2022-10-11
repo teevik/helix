@@ -672,7 +672,7 @@ impl Syntax {
                         let is_pure_insertion = edit.old_end_byte == edit.start_byte;
 
                         // if edit is after range, skip
-                        if edit.start_byte > range.end_byte {
+                        if edit.start_byte >= range.end_byte {
                             // TODO: || (is_noop && edit.start_byte == range.end_byte)
                             continue;
                         }
