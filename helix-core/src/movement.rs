@@ -405,7 +405,13 @@ pub fn goto_treesitter_object(
 
         let cap_name = |t: TextObject| format!("{}.{}", object_name, t);
         let mut cursor = QueryCursor::new();
-        let nodes = lang_config.textobject_query()?.capture_nodes_any(
+        let range = match dir {
+            Direction::Forward => (byte_pos + 1)..slice.len_bytes(),
+            Direction::Backward => 0..byte_pos,
+        };
+        // only search within the relevant range
+        cursor.set_byte_range(range);
+        let mut nodes = lang_config.textobject_query()?.capture_nodes_any(
             &[
                 &cap_name(TextObject::Movement),
                 &cap_name(TextObject::Around),
@@ -417,12 +423,12 @@ pub fn goto_treesitter_object(
         )?;
 
         let node = match dir {
-            Direction::Forward => nodes
-                .filter(|n| n.start_byte() > byte_pos)
-                .min_by_key(|n| n.start_byte())?,
-            Direction::Backward => nodes
-                .filter(|n| n.end_byte() < byte_pos)
-                .max_by_key(|n| n.end_byte())?,
+            // catpure_nodes_any always returns nodes in the correct order
+            // so we don't need to iterate trough all of them which helps performance
+            // tramendously
+            Direction::Forward => nodes.next()?,
+            // captures can not be iterated in reverse so we are stuck with this
+            Direction::Backward => nodes.last()?,
         };
 
         let len = slice.len_bytes();
