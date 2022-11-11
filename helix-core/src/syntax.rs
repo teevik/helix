@@ -9,15 +9,17 @@ use crate::{
 
 use arc_swap::{ArcSwap, Guard};
 use bitflags::bitflags;
+use lru::LruCache;
 use slotmap::{DefaultKey as LayerId, HopSlotMap};
 
 use std::{
     borrow::Cow,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
     fmt,
-    mem::replace,
+    mem::{replace, take, transmute},
     path::Path,
+    rc::Rc,
     str::FromStr,
     sync::Arc,
 };
@@ -691,16 +693,77 @@ impl Loader {
     }
 }
 
+struct HighlightIterCache {
+    range: std::ops::Range<usize>,
+    events: Vec<HighlightEvent>,
+    guard: Rc<Cell<bool>>,
+}
+impl Default for HighlightIterCache {
+    fn default() -> Self {
+        HighlightIterCache {
+            range: usize::MAX..usize::MAX,
+            events: Vec::with_capacity(8),
+            guard: Rc::new(Cell::new(false)),
+        }
+    }
+}
+impl Drop for HighlightIterCache {
+    fn drop(&mut self) {
+        if self.guard.get() {
+            unreachable!(
+                "highlight iter cache was dropped while still in use by a CachedHighlightIter"
+            )
+        }
+    }
+}
+
+struct CachedHighlighterIter {
+    guard: Rc<Cell<bool>>,
+    iter: std::slice::Iter<'static, HighlightEvent>,
+    range: std::ops::Range<usize>,
+}
+
+impl Drop for CachedHighlighterIter {
+    fn drop(&mut self) {
+        self.guard.set(false);
+    }
+}
+
+impl Iterator for CachedHighlighterIter {
+    type Item = Result<HighlightEvent, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for event in &mut self.iter {
+            let mut event = *event;
+            if let HighlightEvent::Source { start, end } = &mut event {
+                if *end <= self.range.start || *start > self.range.end {
+                    continue;
+                } else {
+                    *start = (*start).max(self.range.start);
+                }
+            }
+
+            return Some(Ok(event));
+        }
+
+        None
+    }
+}
+
 pub struct TsParser {
     parser: tree_sitter::Parser,
     pub cursors: Vec<QueryCursor>,
+    highlight_iter_cache: LruCache<usize, HighlightIterCache>,
 }
+
+static GENERATION: AtomicUsize = AtomicUsize::new(0);
 
 // could also just use a pool, or a single instance?
 thread_local! {
     pub static PARSER: RefCell<TsParser> = RefCell::new(TsParser {
         parser: Parser::new(),
         cursors: Vec::new(),
+        highlight_iter_cache: LruCache::new(16.try_into().unwrap())
     })
 }
 
@@ -709,6 +772,7 @@ pub struct Syntax {
     layers: HopSlotMap<LayerId, LanguageLayer>,
     root: LayerId,
     loader: Arc<Loader>,
+    generation: usize,
 }
 
 fn byte_range_to_str(range: std::ops::Range<usize>, source: RopeSlice) -> Cow<str> {
@@ -739,6 +803,7 @@ impl Syntax {
             root,
             layers,
             loader,
+            generation: GENERATION.fetch_add(1, Ordering::Relaxed),
         };
 
         syntax
@@ -754,6 +819,7 @@ impl Syntax {
         source: &Rope,
         changeset: &ChangeSet,
     ) -> Result<(), Error> {
+        self.generation = GENERATION.fetch_add(1, Ordering::Relaxed);
         let mut queue = VecDeque::new();
         queue.push_back(self.root);
 
@@ -1024,9 +1090,81 @@ impl Syntax {
     pub fn tree(&self) -> &Tree {
         self.layers[self.root].tree()
     }
-
     /// Iterate over the highlighted regions for a given slice of source code.
     pub fn highlight_iter<'a>(
+        &'a self,
+        source: RopeSlice<'a>,
+        range: Option<std::ops::Range<usize>>,
+        cancellation_flag: Option<&'a AtomicUsize>,
+    ) -> impl Iterator<Item = Result<HighlightEvent, Error>> + 'a {
+        let range = range.unwrap_or(0..usize::MAX);
+        let (mut cache, mut cached) = PARSER.with(|parser| {
+            let mut parser = parser.borrow_mut();
+            if let Some(cached_iter) = parser.highlight_iter_cache.get_mut(&self.generation) {
+                (take(&mut *cached_iter), true)
+            } else {
+                (
+                    parser
+                        .highlight_iter_cache
+                        .pop_lru()
+                        .map(|(_, it)| it)
+                        .unwrap_or_default(),
+                    false,
+                )
+            }
+        });
+
+        assert!(
+            !cache.guard.replace(true),
+            "tried to access multiple highligh iterators at once from the same thread"
+        );
+
+        // log::error!(
+        //     "range {range:?}, {:?} {:?}",
+        //     cache.range,
+        //     &cache.events[cache.events.len().saturating_sub(5)..]
+        // );
+        // TODO LRU instead of full invalidation?
+        if !cached || range.start < cache.range.start || range.end > cache.range.end {
+            log::error!("redraw");
+            let len = range.end - range.start;
+            let start = range.start.saturating_sub(2 * len);
+            let end = range.end.saturating_add(2 * len);
+            cache.range = start..end;
+            cache.events.clear();
+            cache.events.extend(
+                self.highlight_iter_impl(source, Some(start..end), cancellation_flag)
+                    .map(|it| it.unwrap()),
+            );
+            if end < source.len_bytes() {
+                cache.events.pop();
+            }
+        }
+
+        let iter = unsafe {
+            transmute::<
+                std::slice::Iter<'_, HighlightEvent>,
+                std::slice::Iter<'static, HighlightEvent>,
+            >(cache.events.iter())
+        };
+        let iter = CachedHighlighterIter {
+            guard: cache.guard.clone(),
+            iter,
+            range,
+        };
+
+        PARSER.with(|parser| {
+            parser
+                .borrow_mut()
+                .highlight_iter_cache
+                .put(self.generation, cache)
+        });
+
+        iter
+    }
+
+    /// Iterate over the highlighted regions for a given slice of source code.
+    pub fn highlight_iter_impl<'a>(
         &'a self,
         source: RopeSlice<'a>,
         range: Option<std::ops::Range<usize>>,
