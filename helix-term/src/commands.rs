@@ -4,7 +4,7 @@ pub(crate) mod typed;
 
 pub use dap::*;
 pub use lsp::*;
-use tui::text::Spans;
+use tui::text::{Span, Spans};
 pub use typed::*;
 
 use helix_core::{
@@ -34,6 +34,7 @@ use helix_view::{
     info::Info,
     input::KeyEvent,
     keyboard::KeyCode,
+    theme::Style,
     tree,
     view::View,
     Document, DocumentId, Editor, ViewId,
@@ -54,7 +55,7 @@ use crate::{
 
 use crate::job::{self, Jobs};
 use futures_util::StreamExt;
-use std::{collections::HashMap, fmt, future::Future};
+use std::{collections::HashMap, fmt, future::Future, mem};
 use std::{collections::HashSet, num::NonZeroUsize};
 
 use std::{
@@ -271,6 +272,8 @@ impl MappableCommand {
         file_picker_in_current_directory, "Open file picker at current working directory",
         code_action, "Perform code action",
         buffer_picker, "Open buffer picker",
+        buffer_lines_picker, "Buffer lines picker",
+        changed_buffer_lines_picker, "Changed Buffer lines picker",
         jumplist_picker, "Open jumplist picker",
         symbol_picker, "Open symbol picker",
         select_references_to_symbol_under_cursor, "Select symbol references",
@@ -2364,6 +2367,164 @@ fn buffer_picker(cx: &mut Context) {
         },
     );
     cx.push_layer(Box::new(overlayed(picker)));
+}
+
+fn buffer_lines_picker(cx: &mut Context) {
+    struct BufferLines;
+    impl LineSource for BufferLines {
+        type LinePayload = ();
+
+        fn lines<'a>(&self, doc: &'a Document) -> Result<Vec<LineInfo<'a, Self>>, &'static str> {
+            let lines = doc
+                .text()
+                .lines()
+                .enumerate()
+                .map(|(line, text)| LineInfo {
+                    text,
+                    doc: doc.id(),
+                    idx: line,
+                    payload: (),
+                })
+                .collect();
+            Ok(lines)
+        }
+    }
+    BufferLines.picker(cx)
+}
+
+fn changed_buffer_lines_picker(cx: &mut Context) {
+    struct ChangedBufferLines {
+        added: Style,
+        deleted: Style,
+        modified: Style,
+    }
+    #[derive(Clone, Copy)]
+    enum ChangeKind {
+        Modified,
+        Deleted,
+        Added,
+    }
+
+    impl LineSource for ChangedBufferLines {
+        type LinePayload = ChangeKind;
+
+        fn lines<'a>(&self, doc: &'a Document) -> Result<Vec<LineInfo<'a, Self>>, &'static str> {
+            let handle = doc
+                .diff_handle()
+                .ok_or("No diff provider configured for this buffer")?;
+            let mut changed_lines = Vec::new();
+            let text = doc.text();
+            let text = text.slice(..);
+            for hunk in handle.hunks().iter() {
+                let mut range = hunk.after.clone();
+                let payload = if hunk.is_pure_removal() {
+                    // pure removals are located between lines and have a length of 0.
+                    // Show them anyway
+                    range.end = range.start + 1;
+                    ChangeKind::Deleted
+                } else if hunk.is_pure_insertion() {
+                    ChangeKind::Added
+                } else {
+                    ChangeKind::Modified
+                };
+                let hunk = text
+                    .lines_at(hunk.after.start as usize)
+                    .take(range.len())
+                    .enumerate()
+                    .map(|(i, text)| LineInfo {
+                        text,
+                        payload,
+                        idx: range.start as usize + i,
+                        doc: doc.id(),
+                    });
+                changed_lines.extend(hunk)
+            }
+            Ok(changed_lines)
+        }
+
+        fn label_stlye(&self, line: &LineInfo<Self>) -> Style {
+            match line.payload {
+                ChangeKind::Modified => self.modified,
+                ChangeKind::Deleted => self.deleted,
+                ChangeKind::Added => self.added,
+            }
+        }
+    }
+    let theme = &cx.editor.theme;
+    ChangedBufferLines {
+        added: theme.get("diff.plus"),
+        deleted: theme.get("diff.minus"),
+        modified: theme.get("diff.delta"),
+    }
+    .picker(cx)
+}
+
+struct LineInfo<'a, L: LineSource> {
+    text: RopeSlice<'a>,
+    idx: usize,
+    doc: DocumentId,
+    payload: L::LinePayload,
+}
+
+impl<L: LineSource> ui::menu::Item for LineInfo<'_, L> {
+    type Data = (L, Rope);
+
+    fn label(&self, (source, _rope): &Self::Data) -> Spans {
+        let style = source.label_stlye(self);
+        let spans = self
+            .text
+            .chunks()
+            .map(|text| Span::styled(text, style))
+            .collect();
+        Spans(spans)
+    }
+}
+
+trait LineSource: 'static + Sized {
+    type LinePayload;
+    fn lines<'a>(&self, doc: &'a Document) -> Result<Vec<LineInfo<'a, Self>>, &'static str>;
+    fn label_stlye(&self, _line: &LineInfo<Self>) -> Style {
+        Style::default()
+    }
+
+    fn picker(self, cx: &mut Context) {
+        cx.callback = Some(Box::new(|compositor, cx| {
+            let doc = doc!(cx.editor);
+            let doc_id = doc.id();
+            let text: Rope = doc.text().clone();
+            let lines: Vec<LineInfo<'_, Self>> = match self.lines(doc) {
+                Ok(lines) => lines,
+                Err(err) => {
+                    cx.editor.set_error(err);
+                    return;
+                }
+            };
+
+            // To avoid cloneing each line (essentially a clone of the entire document, which is very expensive)
+            // `LineInfo<'a>` is transmuted to `LineInfo<'static>`.
+            //
+            // Safety: This is save because a clone of `doc.text` is stored as the picker data.
+            // doc.text is a `Rope`. Internally a `Rope` is implemented as an Arc
+            // that is cloned when modified. That means that the reference will
+            // remain valid as long as the Rope exists.
+            // The only place where the `RopeSlice` is accsed (in label()) a reference to the `Rope`
+            // is provided by the picker which acts as prove that the Rope still exists and the reference is still valid.
+            let lines: Vec<LineInfo<'static, Self>> = unsafe { mem::transmute(lines) };
+            let picker = FilePicker::new(
+                lines,
+                (self, text),
+                move |cx, line, action| {
+                    cx.editor.switch(doc_id, action);
+                    let (view, doc) = current!(cx.editor);
+                    let char_pos = doc.text().line_to_char(line.idx);
+                    doc.set_selection(view.id, Selection::point(char_pos));
+                    align_view(doc, view, Align::Center);
+                },
+                move |_, line| Some((line.doc.into(), Some((line.idx, line.idx)))),
+            );
+            compositor.push(Box::new(picker))
+        }));
+    }
 }
 
 fn jumplist_picker(cx: &mut Context) {

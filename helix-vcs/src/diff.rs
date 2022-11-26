@@ -175,4 +175,10 @@ impl FileHunks<'_> {
             None => Hunk::NONE,
         }
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = Hunk> + '_ {
+        self.hunks
+            .iter()
+            .map(|hunk| if self.inverted { hunk.invert() } else { hunk.clone() })
+    }
 }
