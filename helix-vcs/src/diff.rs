@@ -90,6 +90,7 @@ impl DiffHandle {
         } else {
             Some(Instant::now() + tokio::time::Duration::from_millis(SYNC_DIFF_TIMEOUT))
         };
+        log::info!("aquire renderlock and wait");
         self.update_document_impl(doc, self.inverted, Some(RenderLock { lock, timeout }))
     }
 

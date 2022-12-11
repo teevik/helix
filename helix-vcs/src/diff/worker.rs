@@ -29,6 +29,7 @@ pub(super) struct DiffWorker {
 
 impl DiffWorker {
     async fn accumulate_events(&mut self, event: Event) -> (Option<Rope>, Option<Rope>) {
+        log::info!("start event accumulation");
         let mut accumulator = EventAccumulator::new();
         accumulator.handle_event(event).await;
         accumulator
@@ -38,6 +39,7 @@ impl DiffWorker {
                 self.diff_finished_notify.clone(),
             )
             .await;
+        log::info!("finished event accumulation");
         (accumulator.doc, accumulator.diff_base)
     }
 
@@ -58,7 +60,9 @@ impl DiffWorker {
                 }
 
                 if let Some(lines) = interner.interned_lines() {
+                    log::info!("start diff");
                     self.perform_diff(lines)
+                    log::info!("finish diff");
                 }
             };
 
@@ -171,6 +175,7 @@ impl<'a> EventAccumulator {
                 timeout: Some(timeout),
             }) => {
                 tokio::spawn(async move {
+                    log::info!("start polling timeout");
                     let res = {
                         // Acquire a lock on the redraw handle.
                         // The lock will block the rendering from occurring while held.
@@ -178,6 +183,7 @@ impl<'a> EventAccumulator {
                         timeout_at(timeout, diff_finished_notify.notified()).await
                     };
                     // we either reached the timeout or the diff is finished, release the render lock
+                    log::info!("Dropping render lock");
                     drop(lock);
                     if res.is_ok() {
                         // Diff finished in time we are done.
