@@ -61,7 +61,7 @@ impl DiffWorker {
 
                 if let Some(lines) = interner.interned_lines() {
                     log::info!("start diff");
-                    self.perform_diff(lines)
+                    self.perform_diff(lines);
                     log::info!("finish diff");
                 }
             };
@@ -83,6 +83,7 @@ impl DiffWorker {
     /// To improve performance this function tries to reuse the allocation of the old diff previously stored in `self.line_diffs`
     fn apply_hunks(&mut self) {
         swap(&mut *self.hunks.lock(), &mut self.new_hunks);
+        log::info!("notify");
         self.diff_finished_notify.notify_waiters();
         self.new_hunks.clear();
     }
@@ -129,9 +130,15 @@ impl<'a> EventAccumulator {
                     if render_lock.timeout.is_none() {
                         timeout.take();
                     }
+                    log::info!("drop secondary lock")
                 }
-                None => self.render_lock = Some(render_lock),
+                None => {
+                    self.render_lock = Some(render_lock);
+                    log::info!("store lock")
+                }
             }
+        } else {
+            log::info!("async event");
         }
     }
 
@@ -152,8 +159,10 @@ impl<'a> EventAccumulator {
             };
 
             if let Ok(Some(event)) = timeout(debounce, channel.recv()).await {
+                log::info!("debounced {debounce:?}");
                 self.handle_event(event).await;
             } else {
+                log::info!("timeout {debounce:?}");
                 break;
             }
         }
