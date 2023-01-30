@@ -7,8 +7,6 @@ set -x
 
 # The list of PRs to pick here:
 INTERESTING_PRS=(
-  # Add optional substring matching for picker
-  5114
   # Fix old values shown in `select_register`
   5242
   # Make search commands respect register selection
@@ -21,14 +19,18 @@ INTERESTING_PRS=(
   5645
   # search buffer
   5652 
-  # duplicate symlink
-  5658
-  # inital highligh sort order
-  5196
+  # reset hunks
+  5736
+  # # improved completions
+  # 5728
+  # snippets
+  5864
+  # # persistent undo
+  # 5608
+  # # jump mode
+  # 5340
   # # rainbow
   # 2857
-  # rework positioning/rendering and enable softwrap/virtual text
-  5420
 )
 
 # Makes the latest PR head available at a local branch
