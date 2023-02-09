@@ -199,8 +199,7 @@ pub fn line_numbers<'doc>(
                     write!(out, "{:>1$}", " ", width).unwrap();
                 }
 
-                // TODO: Use then_some when MSRV reaches 1.62
-                first_visual_line.then(|| style)
+                first_visual_line.then_some(style)
             }
         },
     )
