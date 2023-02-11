@@ -421,6 +421,11 @@ impl ChangeSet {
                         // in range of replaced text
                         map!(
                             |pos, assoc| (old_end > pos).then(|| {
+                                // if the deleted and inserted text have the exact same size
+                                // keep the relative offset into the new text
+                                if *len == ins {
+                                    return new_pos + (pos - old_pos);
+                                }
                                 // at point or tracking before
                                 if pos == old_pos || assoc == Assoc::Before {
                                     new_pos
