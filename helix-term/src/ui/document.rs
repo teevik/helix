@@ -1,4 +1,5 @@
-use std::cmp::min;
+use std::cmp::{min, Ordering};
+use std::convert::identity;
 
 use helix_core::doc_formatter::{DocumentFormatter, GraphemeSource, TextFormat};
 use helix_core::graphemes::Grapheme;
@@ -7,28 +8,153 @@ use helix_core::syntax::Highlight;
 use helix_core::syntax::HighlightEvent;
 use helix_core::text_annotations::TextAnnotations;
 use helix_core::{visual_offset_from_block, Position, RopeSlice};
-use helix_view::editor::{WhitespaceConfig, WhitespaceRenderValue};
+use helix_view::editor::{CursorCache, WhitespaceConfig, WhitespaceRenderValue};
 use helix_view::graphics::Rect;
 use helix_view::theme::Style;
 use helix_view::view::ViewPosition;
-use helix_view::Document;
-use helix_view::Theme;
+use helix_view::{Document, Theme};
 use tui::buffer::Buffer as Surface;
 
-pub trait LineDecoration {
-    fn render_background(&mut self, _renderer: &mut TextRenderer, _pos: LinePos) {}
-    fn render_foreground(
+/// Decorations are the primary mechanisim for extending the text rendering.
+///
+/// Any on-screen element which is anchored to the rendered text in some form should
+/// be implemented using this trait. Translating char positions to
+/// on-screen positions can be expensive and should not be done during rendering.
+/// Instead such translations are performed on the fly while the text is being rendered.
+/// The results are provided to this trait
+///
+/// To reserve space for virtual text lines (which is then filled by this trait) emit appropriate
+/// [`LineAnnotation`](helix_core::text_annotations::LineAnnotation) in
+/// [`helix_view::Document::text_annotations`] or [`helix_view::View::text_annotations`]
+pub trait Decoration {
+    /// Called **before** a **visual** line is rendered. A visual line does not
+    /// necessairly correspond to a single line in a document as soft wrapping can
+    /// spread a single document line across multiple visual lines.
+    ///
+    /// This function is called before text is rendered as any decorations should
+    /// never overlap the document text. That means that setting the forground color
+    /// here is (essentially) useless as the text color is overwritten by the
+    /// rendered text. This -ofcourse- doesn't apply when rendering inside virtual lines
+    /// below the line reserved by `LineAnnotation`s. e as no text will be rendered here.
+    fn decorate_line(&mut self, _renderer: &mut TextRenderer, _pos: LinePos) {}
+
+    /// Called **after** a **visual** line is rendered. A visual line does not
+    /// necessairly correspond to a single line in a document as soft wrapping can
+    /// spread a single document line across multiple visual lines.
+    ///
+    /// This function is called after text is rendered so that decorations can collect
+    /// horizontal positions on the line (see [`Decoration::render_position`]) first and
+    /// use those positions` while rendering
+    /// virtual text.
+    /// That means that setting the forground color
+    /// here is (essentially) useless as the text color is overwritten by the
+    /// rendered text. This -ofcourse- doesn't apply when rendering inside virtual lines
+    /// below the line reserved by `LineAnnotation`s. e as no text will be rendered here.
+    /// **Note**: To avoid overlapping decorations in the virtual lines, each decoration
+    /// must return the number of virtual text lines it has taken up. Each `Decoration` recieves
+    /// an offset `virt_off` based on these return values where it can render virtual text:
+    ///
+    /// That means that a `render_line` implementation that returns `X` can render virtual text
+    /// in the following area:
+    /// ``` rust
+    /// let start = inner.y + pos.virtual_line + virt_off;
+    /// start .. start + X
+    /// ````
+    fn render_virt_lines(
         &mut self,
         _renderer: &mut TextRenderer,
         _pos: LinePos,
-        _end_char_idx: usize,
+        _virt_off: usize,
+    ) -> usize {
+        0
+    }
+
+    /// This function is called **before** the grapheme at `char_idx` is rendered.
+    /// A decoration must register all char indecies it is interested in (hence for which
+    /// this funciton will be called) with [`DecorationsManager::register_positiom`].
+    fn decorate_position(
+        &mut self,
+        _renderer: &mut TextRenderer,
+        _char_idx: usize,
+        _pos: Position,
     ) {
     }
 }
 
-impl<F: FnMut(&mut TextRenderer, LinePos)> LineDecoration for F {
-    fn render_background(&mut self, renderer: &mut TextRenderer, pos: LinePos) {
-        self(renderer, pos)
+impl<F: FnMut(&mut TextRenderer, LinePos)> Decoration for F {
+    fn decorate_line(&mut self, renderer: &mut TextRenderer, pos: LinePos) {
+        self(renderer, pos);
+    }
+}
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct DecorationRenderIdx(u32);
+
+#[derive(Default)]
+pub struct DecorationManager<'a> {
+    position_hooks: Vec<(usize, DecorationRenderIdx)>,
+    current_idx: usize,
+    decorations: Vec<Box<dyn Decoration + 'a>>,
+}
+
+impl<'a> DecorationManager<'a> {
+    pub fn add_decoration(&mut self, decoration: impl Decoration + 'a) -> DecorationRenderIdx {
+        let idx = self.decorations.len() as u32;
+        self.decorations.push(Box::new(decoration));
+        DecorationRenderIdx(idx)
+    }
+
+    /// Register `char_idx` with the decoration manager so that `[Decoration::render_position]`
+    /// is called when that `char_idx` is called for a decoration when `char_idx` is reached.
+    ///
+    /// The `char_idx` don't need to be registered in order as they are sorted anyway.
+    /// However sorting is (slightly) faster if they are. If the same `char_idx` multiple times
+    /// for the same decoration  then
+    pub fn register_positon(&mut self, decoration: DecorationRenderIdx, char_idx: usize) {
+        self.position_hooks.push((char_idx, decoration))
+    }
+
+    fn prepare_for_rendering(&mut self, first_visible_char: usize) {
+        // Sort by char index, if the char index is identical, sort by the `DecorationRenderIdx`
+        // so that decorations are called in the order they were added
+        self.position_hooks.sort_unstable();
+        self.current_idx = self
+            .position_hooks
+            .binary_search_by_key(&first_visible_char, |&(char_pos, _)| char_pos)
+            .unwrap_or_else(identity);
+    }
+
+    fn decorate_position(&mut self, char_idx: usize, renderer: &mut TextRenderer, pos: Position) {
+        for &(hook_char_idx, decoration) in &self.position_hooks[self.current_idx..] {
+            match hook_char_idx.cmp(&char_idx) {
+                // this grapheme has been concealed by a fold etc.
+                // (currently unimplemented, but considered here for future proofing)
+                Ordering::Less => (),
+                Ordering::Equal => self.decorations[decoration.0 as usize]
+                    .decorate_position(renderer, char_idx, pos),
+                Ordering::Greater => break,
+            }
+
+            self.current_idx += 1;
+        }
+    }
+
+    fn decorate_line(&mut self, renderer: &mut TextRenderer, pos: LinePos) {
+        for decoration in &mut self.decorations {
+            decoration.decorate_line(renderer, pos);
+        }
+    }
+
+    fn render_virtual_lines(&mut self, renderer: &mut TextRenderer, pos: LinePos) {
+        let mut virt_off = 0;
+        for decoration in &mut self.decorations {
+            virt_off += decoration.render_virt_lines(renderer, pos, virt_off);
+        }
+    }
+}
+
+impl<'a> Decoration for &'a CursorCache {
+    fn decorate_position(&mut self, _renderer: &mut TextRenderer, _char_idx: usize, pos: Position) {
+        self.set(Some(pos))
     }
 }
 
@@ -81,14 +207,7 @@ pub struct LinePos {
     pub doc_line: usize,
     /// Vertical offset from the top of the inner view area
     pub visual_line: u16,
-    /// The first char index of this visual line.
-    /// Note that if the visual line is entirely filled by
-    /// a very long inline virtual text then this index will point
-    /// at the next (non-virtual) char after this visual line
-    pub start_char_idx: usize,
 }
-
-pub type TranslatedPosition<'a> = (usize, Box<dyn FnMut(&mut TextRenderer, Position) + 'a>);
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_document(
@@ -99,8 +218,7 @@ pub fn render_document(
     doc_annotations: &TextAnnotations,
     highlight_iter: impl Iterator<Item = HighlightEvent>,
     theme: &Theme,
-    line_decoration: &mut [Box<dyn LineDecoration + '_>],
-    translated_positions: &mut [TranslatedPosition],
+    decorations: DecorationManager,
 ) {
     let mut renderer = TextRenderer::new(surface, doc, theme, offset.horizontal_offset, viewport);
     render_text(
@@ -111,43 +229,8 @@ pub fn render_document(
         doc_annotations,
         highlight_iter,
         theme,
-        line_decoration,
-        translated_positions,
+        decorations,
     )
-}
-
-fn translate_positions(
-    char_pos: usize,
-    first_visisble_char_idx: usize,
-    translated_positions: &mut [TranslatedPosition],
-    text_fmt: &TextFormat,
-    renderer: &mut TextRenderer,
-    pos: Position,
-) {
-    // check if any positions translated on the fly (like cursor) has been reached
-    for (char_idx, callback) in &mut *translated_positions {
-        if *char_idx < char_pos && *char_idx >= first_visisble_char_idx {
-            // by replacing the char_index with usize::MAX large number we ensure
-            // that the same position is only translated once
-            // text will never reach usize::MAX as rust memory allocations are limited
-            // to isize::MAX
-            *char_idx = usize::MAX;
-
-            if text_fmt.soft_wrap {
-                callback(renderer, pos)
-            } else if pos.col >= renderer.col_offset
-                && pos.col - renderer.col_offset < renderer.viewport.width as usize
-            {
-                callback(
-                    renderer,
-                    Position {
-                        row: pos.row,
-                        col: pos.col - renderer.col_offset,
-                    },
-                )
-            }
-        }
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -159,8 +242,7 @@ pub fn render_text<'t>(
     text_annotations: &TextAnnotations,
     highlight_iter: impl Iterator<Item = HighlightEvent>,
     theme: &Theme,
-    line_decorations: &mut [Box<dyn LineDecoration + '_>],
-    translated_positions: &mut [TranslatedPosition],
+    mut decorations: DecorationManager,
 ) {
     let (
         Position {
@@ -177,7 +259,7 @@ pub fn render_text<'t>(
     row_off += offset.vertical_offset;
     assert_eq!(0, offset.vertical_offset);
 
-    let (mut formatter, mut first_visible_char_idx) =
+    let (mut formatter, char_off) =
         DocumentFormatter::new_at_prev_checkpoint(text, text_fmt, text_annotations, offset.anchor);
     let mut styles = StyleIter {
         text_style: renderer.text_style,
@@ -185,12 +267,12 @@ pub fn render_text<'t>(
         highlight_iter,
         theme,
     };
+    decorations.prepare_for_rendering(char_off);
 
     let mut last_line_pos = LinePos {
         first_visual_line: false,
         doc_line: usize::MAX,
         visual_line: u16::MAX,
-        start_char_idx: usize::MAX,
     };
     let mut is_in_indent_area = true;
     let mut last_line_indent_level = 0;
@@ -210,15 +292,8 @@ pub fn render_text<'t>(
             if last_pos.row >= row_off {
                 last_pos.col -= 1;
                 last_pos.row -= row_off;
-                // check if any positions translated on the fly (like cursor) are at the EOF
-                translate_positions(
-                    char_pos + 1,
-                    first_visible_char_idx,
-                    translated_positions,
-                    text_fmt,
-                    renderer,
-                    last_pos,
-                );
+                // decorate EOF char
+                decorations.decorate_position(char_pos, renderer, last_pos);
             }
             break;
         };
@@ -234,7 +309,6 @@ pub fn render_text<'t>(
                 }
             }
             char_pos += grapheme.doc_chars();
-            first_visible_char_idx = char_pos + 1;
             continue;
         }
         pos.row -= row_off;
@@ -247,21 +321,17 @@ pub fn render_text<'t>(
         // apply decorations before rendering a new line
         if pos.row as u16 != last_line_pos.visual_line {
             if pos.row > 0 {
+                // draw indent guides for the last line
                 renderer.draw_indent_guides(last_line_indent_level, last_line_pos.visual_line);
                 is_in_indent_area = true;
-                for line_decoration in &mut *line_decorations {
-                    line_decoration.render_foreground(renderer, last_line_pos, char_pos);
-                }
+                decorations.render_virtual_lines(renderer, last_line_pos)
             }
             last_line_pos = LinePos {
                 first_visual_line: doc_line != last_line_pos.doc_line,
                 doc_line,
                 visual_line: pos.row as u16,
-                start_char_idx: char_pos,
             };
-            for line_decoration in &mut *line_decorations {
-                line_decoration.render_background(renderer, last_line_pos);
-            }
+            decorations.decorate_line(renderer, last_line_pos);
         }
 
         // aquire the correct grapheme style
@@ -273,17 +343,6 @@ pub fn render_text<'t>(
                 (Style::default(), usize::MAX)
             }
         }
-        char_pos += grapheme.doc_chars();
-
-        // check if any positions translated on the fly (like cursor) has been reached
-        translate_positions(
-            char_pos,
-            first_visible_char_idx,
-            translated_positions,
-            text_fmt,
-            renderer,
-            pos,
-        );
 
         let grapheme_style = if let GraphemeSource::VirtualText { highlight } = grapheme.source {
             let style = renderer.text_style;
@@ -295,6 +354,8 @@ pub fn render_text<'t>(
         } else {
             style_span.0
         };
+        decorations.decorate_position(char_pos, renderer, pos);
+        char_pos += grapheme.doc_chars();
 
         renderer.draw_grapheme(
             grapheme.grapheme,
@@ -306,9 +367,7 @@ pub fn render_text<'t>(
     }
 
     renderer.draw_indent_guides(last_line_indent_level, last_line_pos.visual_line);
-    for line_decoration in &mut *line_decorations {
-        line_decoration.render_foreground(renderer, last_line_pos, char_pos);
-    }
+    decorations.render_virtual_lines(renderer, last_line_pos)
 }
 
 #[derive(Debug)]

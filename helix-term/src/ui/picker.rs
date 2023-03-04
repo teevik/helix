@@ -4,7 +4,7 @@ use crate::{
     ctrl, key, shift,
     ui::{
         self,
-        document::{render_document, LineDecoration, LinePos, TextRenderer},
+        document::{render_document, DecorationManager, LinePos, TextRenderer},
         fuzzy_match::FuzzyQuery,
         EditorView,
     },
@@ -312,7 +312,7 @@ impl<T: Item + 'static> Component for FilePicker<T> {
                 }
                 highlights = Box::new(helix_core::syntax::merge(highlights, spans));
             }
-            let mut decorations: Vec<Box<dyn LineDecoration>> = Vec::new();
+            let mut decorations = DecorationManager::default();
 
             if let Some((start, end)) = range {
                 let style = cx
@@ -331,7 +331,7 @@ impl<T: Item + 'static> Component for FilePicker<T> {
                         renderer.surface.set_style(area, style)
                     }
                 };
-                decorations.push(Box::new(draw_highlight))
+                decorations.add_decoration(draw_highlight);
             }
 
             render_document(
@@ -342,8 +342,7 @@ impl<T: Item + 'static> Component for FilePicker<T> {
                 &TextAnnotations::default(),
                 highlights,
                 &cx.editor.theme,
-                &mut decorations,
-                &mut [],
+                decorations,
             );
         }
     }
