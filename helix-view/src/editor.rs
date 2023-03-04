@@ -864,7 +864,7 @@ pub struct Editor {
     /// This cache is only a performance optimization to
     /// avoid calculating the cursor position multiple
     /// times during rendering and should not be set by other functions.
-    pub cursor_cache: Cell<Option<Option<Position>>>,
+    pub cursor_cache: CursorCache,
     /// When a new completion request is sent to the server old
     /// unifinished request must be dropped. Each completion
     /// request is associated with a channel that cancels
@@ -970,7 +970,7 @@ impl Editor {
             config_events: unbounded_channel(),
             redraw_handle: Default::default(),
             needs_redraw: false,
-            cursor_cache: Cell::new(None),
+            cursor_cache: CursorCache::default(),
             completion_request_handle: None,
         }
     }
@@ -1534,15 +1534,7 @@ impl Editor {
     pub fn cursor(&self) -> (Option<Position>, CursorKind) {
         let config = self.config();
         let (view, doc) = current_ref!(self);
-        let cursor = doc
-            .selection(view.id)
-            .primary()
-            .cursor(doc.text().slice(..));
-        let pos = self
-            .cursor_cache
-            .get()
-            .unwrap_or_else(|| view.screen_coords_at_pos(doc, doc.text().slice(..), cursor));
-        if let Some(mut pos) = pos {
+        if let Some(mut pos) = self.cursor_cache.get(view, doc) {
             let inner = view.inner_area(doc);
             pos.col += inner.x as usize;
             pos.row += inner.y as usize;
@@ -1691,5 +1683,22 @@ fn try_restore_indent(doc: &mut Document, view: &mut View) {
                 (line_start_pos, pos, None)
             });
         doc.apply(&transaction, view.id);
+    }
+}
+
+#[derive(Default)]
+pub struct CursorCache(Cell<Option<Option<Position>>>);
+
+impl CursorCache {
+    pub fn get(&self, view: &View, doc: &Document) -> Option<Position> {
+        self.0.get().unwrap_or_else(|| {
+            let text = doc.text().slice(..);
+            let cursor = doc.selection(view.id).primary().cursor(text);
+            view.screen_coords_at_pos(doc, text, cursor)
+        })
+    }
+
+    pub fn set(&self, cursor_pos: Option<Position>) {
+        self.0.set(Some(cursor_pos))
     }
 }
