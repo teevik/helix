@@ -6,7 +6,7 @@ use futures_util::FutureExt;
 use helix_core::auto_pairs::AutoPairs;
 use helix_core::doc_formatter::TextFormat;
 use helix_core::syntax::Highlight;
-use helix_core::text_annotations::{InlineAnnotation, TextAnnotations};
+use helix_core::text_annotations::InlineAnnotation;
 use helix_core::Range;
 use helix_vcs::{DiffHandle, DiffProviderRegistry};
 
@@ -1473,12 +1473,6 @@ impl Document {
                 .and_then(|theme| theme.find_scope_index("ui.virtual.wrap"))
                 .map(Highlight),
         }
-    }
-
-    /// Get the text annotations that apply to the whole document, those that do not apply to any
-    /// specific view.
-    pub fn text_annotations(&self, _theme: Option<&Theme>) -> TextAnnotations {
-        TextAnnotations::default()
     }
 
     /// Set the inlay hints for this document and `view_id`.
