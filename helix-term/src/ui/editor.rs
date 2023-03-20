@@ -6,7 +6,7 @@ use crate::{
     keymap::{KeymapResult, Keymaps},
     ui::{
         document::{render_document, LinePos, TextRenderer},
-        text_decorations::{self, Decoration, DecorationManager},
+        text_decorations::{self, Decoration, DecorationManager, InlineDiagnostics},
         Completion, ProgressSpinners,
     },
 };
@@ -187,17 +187,24 @@ impl EditorView {
             is_focused,
             &mut decorations,
         );
-
+        let primary_cursor = doc
+            .selection(view.id)
+            .primary()
+            .cursor(doc.text().slice(..));
         if is_focused {
             decorations.add_decoration(text_decorations::Cursor {
                 cache: &editor.cursor_cache,
-                primary_cursor: doc
-                    .selection(view.id)
-                    .primary()
-                    .cursor(doc.text().slice(..)),
+                primary_cursor,
             });
         }
-
+        if config.lsp.inline_diagnostics.enable(inner.width) {
+            decorations.add_decoration(InlineDiagnostics::new(
+                doc.diagnostics(),
+                theme,
+                primary_cursor,
+                config.lsp.inline_diagnostics.clone(),
+            ));
+        }
         render_document(
             surface,
             inner,

@@ -23,6 +23,12 @@ pub struct Range {
     pub end: usize,
 }
 
+impl Range {
+    pub fn contains(self, pos: usize) -> bool {
+        (self.start..self.end).contains(&pos)
+    }
+}
+
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Deserialize, Serialize)]
 pub enum NumberOrString {
     Number(i32),
@@ -46,4 +52,10 @@ pub struct Diagnostic {
     pub tags: Vec<DiagnosticTag>,
     pub source: Option<String>,
     pub data: Option<serde_json::Value>,
+}
+
+impl Diagnostic {
+    pub fn severity(&self) -> Severity {
+        self.severity.unwrap_or(Severity::Warning)
+    }
 }
