@@ -313,10 +313,11 @@ pub fn char_idx_at_visual_offset<'a>(
     text_fmt: &TextFormat,
     annotations: &TextAnnotations,
 ) -> (usize, usize) {
+    let mut pos = anchor;
     // convert row relative to visual line containing anchor to row relative to a block containing anchor (anchor may change)
     loop {
         let (visual_pos_in_block, block_char_offset) =
-            visual_offset_from_block(text, anchor, anchor, text_fmt, annotations);
+            visual_offset_from_block(text, anchor, pos, text_fmt, annotations);
         row_offset += visual_pos_in_block.row as isize;
         anchor = block_char_offset;
         if row_offset >= 0 {
@@ -330,8 +331,8 @@ pub fn char_idx_at_visual_offset<'a>(
         // the row_offset is negative so we need to look at the previous block
         // set the anchor to the last char before the current block
         // this char index is also always a line earlier so increase the row_offset by 1
+        pos = anchor;
         anchor -= 1;
-        row_offset += 1;
     }
 
     char_idx_at_visual_block_offset(
@@ -395,6 +396,7 @@ pub fn char_idx_at_visual_block_offset(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::text_annotations::LineAnnotation;
     use crate::Rope;
 
     #[test]
@@ -757,97 +759,108 @@ mod test {
 
     #[test]
     fn test_char_idx_at_visual_row_offset() {
-        let text = Rope::from("ḧëḷḷö\nẅöṛḷḋ\nfoo");
-        let slice = text.slice(..);
-        let mut text_fmt = TextFormat::default();
-        for i in 0isize..3isize {
-            for j in -2isize..=2isize {
-                if !(0..3).contains(&(i + j)) {
-                    continue;
+        for virtual_lines in 0..5 {
+            let mut annotations = TextAnnotations::default();
+            annotations.add_line_annotation(Box::new(TestLineAnnotation(virtual_lines)));
+            let line_spacing = 1 + virtual_lines as isize;
+            println!("linespacing {line_spacing}");
+
+            let text = Rope::from("ḧëḷḷö\nẅöṛḷḋ\nfoo");
+            let slice = text.slice(..);
+            let mut text_fmt = TextFormat::default();
+            for i in 0isize..3isize {
+                for j in -2isize..=2isize {
+                    if !(0..3).contains(&(i + j)) {
+                        continue;
+                    }
+                    println!("{i} {j}");
+                    assert_eq!(
+                        char_idx_at_visual_offset(
+                            slice,
+                            slice.line_to_char(i as usize),
+                            j * line_spacing,
+                            3,
+                            &text_fmt,
+                            &annotations,
+                        )
+                        .0,
+                        slice.line_to_char((i + j) as usize) + 3
+                    );
                 }
-                println!("{i} {j}");
-                assert_eq!(
-                    char_idx_at_visual_offset(
-                        slice,
-                        slice.line_to_char(i as usize),
-                        j,
-                        3,
-                        &text_fmt,
-                        &TextAnnotations::default(),
-                    )
-                    .0,
-                    slice.line_to_char((i + j) as usize) + 3
-                );
             }
+            text_fmt.soft_wrap = true;
+            let mut softwrapped_text = "foo ".repeat(10);
+            softwrapped_text.push('\n');
+            let last_char = softwrapped_text.len() - 1;
+
+            let text = Rope::from(softwrapped_text.repeat(3));
+            let slice = text.slice(..);
+            assert_eq!(
+                char_idx_at_visual_offset(slice, last_char, 0, 0, &text_fmt, &annotations,).0,
+                32
+            );
+            assert_eq!(
+                char_idx_at_visual_offset(
+                    slice,
+                    last_char,
+                    -line_spacing,
+                    0,
+                    &text_fmt,
+                    &annotations,
+                )
+                .0,
+                16
+            );
+            assert_eq!(
+                char_idx_at_visual_offset(
+                    slice,
+                    last_char,
+                    -2 * line_spacing,
+                    0,
+                    &text_fmt,
+                    &annotations,
+                )
+                .0,
+                0
+            );
+            assert_eq!(
+                char_idx_at_visual_offset(
+                    slice,
+                    softwrapped_text.len() + last_char,
+                    -2 * line_spacing,
+                    0,
+                    &text_fmt,
+                    &annotations,
+                )
+                .0,
+                softwrapped_text.len()
+            );
+
+            assert_eq!(
+                char_idx_at_visual_offset(
+                    slice,
+                    softwrapped_text.len() + last_char,
+                    -5 * line_spacing,
+                    0,
+                    &text_fmt,
+                    &annotations,
+                )
+                .0,
+                0
+            );
         }
+    }
 
-        text_fmt.soft_wrap = true;
-        let mut softwrapped_text = "foo ".repeat(10);
-        softwrapped_text.push('\n');
-        let last_char = softwrapped_text.len() - 1;
-
-        let text = Rope::from(softwrapped_text.repeat(3));
-        let slice = text.slice(..);
-        assert_eq!(
-            char_idx_at_visual_offset(
-                slice,
-                last_char,
-                0,
-                0,
-                &text_fmt,
-                &TextAnnotations::default(),
-            )
-            .0,
-            32
-        );
-        assert_eq!(
-            char_idx_at_visual_offset(
-                slice,
-                last_char,
-                -1,
-                0,
-                &text_fmt,
-                &TextAnnotations::default(),
-            )
-            .0,
-            16
-        );
-        assert_eq!(
-            char_idx_at_visual_offset(
-                slice,
-                last_char,
-                -2,
-                0,
-                &text_fmt,
-                &TextAnnotations::default(),
-            )
-            .0,
-            0
-        );
-        assert_eq!(
-            char_idx_at_visual_offset(
-                slice,
-                softwrapped_text.len() + last_char,
-                -2,
-                0,
-                &text_fmt,
-                &TextAnnotations::default(),
-            )
-            .0,
-            softwrapped_text.len()
-        );
-
-        assert_eq!(
-            char_idx_at_visual_offset(
-                slice,
-                softwrapped_text.len() + last_char,
-                -5,
-                0,
-                &text_fmt,
-                &TextAnnotations::default(),
-            )
-            .0,
-            0
-        );
+    #[derive(Debug)]
+    struct TestLineAnnotation(usize);
+    impl LineAnnotation for TestLineAnnotation {
+        fn insert_virtual_lines(
+            &mut self,
+            _line_end_char_idx: usize,
+            _vertical_off: usize,
+            _doc_line: usize,
+        ) -> usize {
+            self.0
+        }
     }
 }
