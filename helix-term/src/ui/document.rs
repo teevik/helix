@@ -169,7 +169,6 @@ pub fn render_text<'t>(
     .0
     .row;
     row_off += offset.vertical_offset;
-    assert_eq!(0, offset.vertical_offset);
 
     let mut formatter =
         DocumentFormatter::new_at_prev_checkpoint(text, text_fmt, text_annotations, offset.anchor);
