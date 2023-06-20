@@ -7,30 +7,12 @@ set -x
 
 # The list of PRs to pick here:
 INTERESTING_PRS=(
-  # Fix old values shown in `select_register`
-  5242
-  # Make search commands respect register selection
-  5244
-  # Support going to specific positions in file
-  5260
-  # Only render the auto-complete menu if it intersects with signature help
-  5523
-  # Changed file picker
-  5645
-  # search buffer
-  5652 
-  # reset hunks
-  5736
-  # # improved completions
-  # 5728
-  # snippets
-  5864
-  # # persistent undo
-  # 5608
-  # # jump mode
-  # 5340
-  # # rainbow
-  # 2857
+ # jump mode
+  5340
+  # brackets
+  7242
+  # long lived diagnostics
+  6447
 )
 
 # Makes the latest PR head available at a local branch
