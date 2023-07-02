@@ -9,10 +9,7 @@ pub use jsonrpc::Call;
 pub use lsp::{Position, Url};
 pub use lsp_types as lsp;
 
-use futures_util::{
-    stream::{select_all::SelectAll, Peekable},
-    StreamExt,
-};
+use futures_util::{stream::select_all::SelectAll, FutureExt, Stream, StreamExt};
 use helix_core::{
     path,
     syntax::{LanguageConfiguration, LanguageServerConfiguration, LanguageServerFeatures},
@@ -24,6 +21,7 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
+    task::{Context, Poll},
 };
 
 use thiserror::Error;
@@ -623,7 +621,55 @@ impl Notification {
     }
 }
 
-type IncomingStreams = Pin<Box<Peekable<SelectAll<UnboundedReceiverStream<(usize, Call)>>>>>;
+#[derive(Debug)]
+pub struct IncomingStreams {
+    incoming: SelectAll<UnboundedReceiverStream<(usize, Call)>>,
+    peeked: Option<(usize, Call)>,
+}
+
+impl IncomingStreams {
+    fn new() -> Self {
+        Self {
+            incoming: SelectAll::new(),
+            peeked: None,
+        }
+    }
+
+    fn add(&mut self, stream: UnboundedReceiverStream<(usize, Call)>) {
+        self.incoming.push(stream)
+    }
+
+    pub fn has_pending_message(&mut self) -> bool {
+        if self.peeked.is_some() {
+            return true;
+        }
+        self.peeked = self.incoming.next().now_or_never().flatten();
+        self.peeked.is_some()
+    }
+}
+
+impl Stream for IncomingStreams {
+    type Item = (usize, Call);
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        if let Some(item) = this.peeked.take() {
+            return Poll::Ready(Some(item));
+        }
+        this.incoming.poll_next_unpin(cx)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let peek_len = usize::from(self.peeked.is_some());
+        let (lower, upper) = self.incoming.size_hint();
+        let lower = lower.saturating_add(peek_len);
+        let upper = match upper {
+            Some(x) => x.checked_add(peek_len),
+            None => None,
+        };
+        (lower, upper)
+    }
+}
 
 #[derive(Debug)]
 pub struct Registry {
@@ -639,7 +685,7 @@ impl Registry {
             inner: HashMap::new(),
             syn_loader,
             counter: 0,
-            incoming: Box::pin(SelectAll::new().peekable()),
+            incoming: IncomingStreams::new(),
         }
     }
 
@@ -682,9 +728,7 @@ impl Registry {
             root_dirs,
             enable_snippets,
         )?;
-        self.incoming
-            .get_mut()
-            .push(UnboundedReceiverStream::new(incoming));
+        self.incoming.add(UnboundedReceiverStream::new(incoming));
         Ok(client)
     }
 
