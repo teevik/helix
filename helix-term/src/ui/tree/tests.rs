@@ -34,8 +34,10 @@ impl TreeData for TestData {
     }
 }
 
+const TEST_TREE_HEIGHT: usize = 3;
+const TEST_TREE_SCROLLOFF: usize = 1;
 fn tree(paths: &[&'static str]) -> Tree<TestData> {
-    let tree = Tree::new(TestData::new(paths));
+    let tree = Tree::new(TestData::new(paths), TEST_TREE_HEIGHT, TEST_TREE_SCROLLOFF);
     tree
 }
 macro_rules! assert_eq_tree {
@@ -71,19 +73,22 @@ fn expand() {
 
 #[test]
 fn refresh() {
-    let mut tree = tree(&["foo", "foo/bar", "foo/bar/3", "foobar", "foo/bar2"]);
-    tree.expand(0).unwrap();
-    tree.expand(2).unwrap();
-    tree.expand(1).unwrap();
+    let mut tree1 = tree(&["foo", "foo/bar", "foo/bar/3", "foobar", "foo/bar2"]);
+    tree1.expand(0).unwrap();
+    tree1.expand(2).unwrap();
+    tree1.expand(1).unwrap();
     assert_eq_tree!(
-        tree,
+        tree1,
         r#"{["foo"], ["foo", "bar"], ["foo", "bar", "3"], ["foo", "bar2"], ["foobar"]}"#
     );
-    tree.refresh();
+    tree1.refresh();
     assert_eq_tree!(
-        tree,
+        tree1,
         r#"{["foo"], ["foo", "bar"], ["foo", "bar", "3"], ["foo", "bar2"], ["foobar"]}"#
     );
+    let mut tree2 = tree(&["foo", "foo/bar", "foo/bar/3", "foobar", "foo/bar2"]);
+    tree2.refresh();
+    assert_eq_tree!(tree2, r#"{["foo"], ["foobar"]}"#);
 }
 
 #[test]
@@ -95,4 +100,35 @@ fn reveal() {
         r#"{["foo"], ["foo", "bar"], ["foo", "bar", "3"], ["foo", "bar2"], ["foobar"]}"#
     );
     assert_eq!(idx, 2)
+}
+
+macro_rules! assert_selection {
+    ($tree:expr, $selection:literal, $top:literal) => {
+        println!("{:?}", $tree);
+        assert_eq!($tree.selection, $selection, "selection");
+        assert_eq!($tree.top, $top, "last");
+    };
+}
+#[test]
+fn set_selection() {
+    let mut tree = tree(&["foo", "foo/bar", "foo/bar/3", "foobar", "foo/bar2/test"]);
+    tree.set_selection(0);
+    assert_selection!(tree, 0, 0);
+    tree.set_selection(1);
+    assert_selection!(tree, 1, 0);
+    tree.expand(0).unwrap();
+    assert_selection!(tree, 3, 1);
+    tree.collapse(0);
+    assert_selection!(tree, 3, 0);
+    tree.move_up();
+    assert_selection!(tree, 0, 0);
+    println!("x");
+    tree.expand(0).unwrap();
+    assert_selection!(tree, 0, 0);
+    tree.move_down();
+    assert_selection!(tree, 1, 0);
+    tree.collapse(0);
+    assert_selection!(tree, 0, 0);
+    tree.move_down();
+    assert_selection!(tree, 3, 0);
 }
