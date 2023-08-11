@@ -1762,7 +1762,8 @@ dependencies = [
 [[package]]
 name = "nucleo"
 version = "0.1.0"
-source = "git+https://github.com/helix-editor/nucleo.git#9c4b71027f0389ec59fd0f6d2d48fa4ed76fdc6b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cd95e765e08176708ecd84735137f35aa459308606bc378b6c38a83c1ad77cf"
 dependencies = [
  "nucleo-matcher",
  "parking_lot",
@@ -1772,7 +1773,8 @@ dependencies = [
 [[package]]
 name = "nucleo-matcher"
 version = "0.1.0"
-source = "git+https://github.com/helix-editor/nucleo.git#9c4b71027f0389ec59fd0f6d2d48fa4ed76fdc6b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76014af745da10c35a010e1a26955d00463d36df9766067bd21ee893f07c3fbc"
 dependencies = [
  "cov-mark",
  "memchr",
