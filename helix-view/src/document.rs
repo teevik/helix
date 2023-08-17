@@ -34,6 +34,7 @@ use helix_core::{
 };
 
 use crate::editor::Config;
+use crate::events::{DocumentDidChange, SelectionDidChange};
 use crate::{DocumentId, Editor, Theme, View, ViewId};
 
 /// 8kB of buffer space for encoding and decoding `Rope`s.
@@ -1106,6 +1107,10 @@ impl Document {
         // TODO: use a transaction?
         self.selections
             .insert(view_id, selection.ensure_invariants(self.text().slice(..)));
+        helix_event::dispatch(SelectionDidChange {
+            doc: self,
+            view: view_id,
+        })
     }
 
     /// Find the origin selection of the text in a document, i.e. where
@@ -1174,6 +1179,10 @@ impl Document {
                     view_id,
                     selection.clone().ensure_invariants(self.text.slice(..)),
                 );
+                helix_event::dispatch(SelectionDidChange {
+                    doc: self,
+                    view: view_id,
+                });
             }
 
             self.modified_since_accessed = true;
@@ -1264,6 +1273,13 @@ impl Document {
             }
 
             if emit_lsp_notification {
+                helix_event::dispatch(DocumentDidChange {
+                    doc: self,
+                    view: view_id,
+                    old_text: &old_doc,
+                });
+
+                // TODO: move to hook
                 // emit lsp notification
                 for language_server in self.language_servers() {
                     let notify = language_server.text_document_did_change(
