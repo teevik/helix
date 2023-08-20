@@ -88,21 +88,36 @@ impl<T: Item> Menu<T> {
         }
     }
 
-    pub fn score(&mut self, pattern: &str) {
-        // reuse the matches allocation
-        self.matches.clear();
+    pub fn score(&mut self, pattern: &str, incremental: bool) {
         let mut matcher = MATCHER.lock();
         matcher.config = MatcherConfig::DEFAULT;
         let mut pattern_ = Pattern::new(&matcher.config, CaseMatching::Ignore);
         pattern_.set_literal(pattern, PatternKind::Fuzzy, false);
         let mut buf = Vec::new();
-        let matches = self.options.iter().enumerate().filter_map(|(i, option)| {
-            let text = option.filter_text(&self.editor_data);
-            pattern_
-                .score(Utf32Str::new(&text, &mut buf), &mut matcher)
-                .map(|score| (i as u32, score))
-        });
-        self.matches.extend(matches);
+
+        if incremental {
+            self.matches.retain_mut(|(index, score)| {
+                let option = &self.options[*index as usize];
+                let text = option.filter_text(&self.editor_data);
+                let new_score = pattern_.score(Utf32Str::new(&text, &mut buf), &mut matcher);
+                match new_score {
+                    Some(new_score) => {
+                        *score = new_score;
+                        true
+                    }
+                    None => false,
+                }
+            })
+        } else {
+            self.matches.clear();
+            let matches = self.options.iter().enumerate().filter_map(|(i, option)| {
+                let text = option.filter_text(&self.editor_data);
+                pattern_
+                    .score(Utf32Str::new(&text, &mut buf), &mut matcher)
+                    .map(|score| (i as u32, score))
+            });
+            self.matches.extend(matches);
+        }
         self.matches
             .sort_unstable_by_key(|&(i, score)| (Reverse(score), i));
 
