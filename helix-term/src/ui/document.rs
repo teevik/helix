@@ -296,6 +296,46 @@ impl<'a> TextRenderer<'a> {
             offset,
         }
     }
+    /// Draws a single `grapheme` at the current render position with a specified `style`.
+    pub fn draw_decoration_grapheme(
+        &mut self,
+        grapheme: Grapheme,
+        mut style: Style,
+        mut row: u16,
+        col: u16,
+    ) -> bool {
+        if (row as usize) < self.offset.row
+            || row >= self.viewport.height
+            || col >= self.viewport.width
+        {
+            return false;
+        }
+        row -= self.offset.row as u16;
+        let is_whitespace = grapheme.is_whitespace();
+
+        // TODO is it correct to apply the whitspace style to all unicode white spaces?
+        if is_whitespace {
+            style = style.patch(self.whitespace_style);
+        }
+
+        let grapheme = match grapheme {
+            Grapheme::Tab { width } => {
+                let grapheme_tab_width = char_to_byte_idx(&self.virtual_tab, width);
+                &self.virtual_tab[..grapheme_tab_width]
+            }
+            Grapheme::Other { ref g } if g == "\u{00A0}" => " ",
+            Grapheme::Other { ref g } => g,
+            Grapheme::Newline => " ",
+        };
+
+        self.surface.set_string(
+            self.viewport.x + col,
+            self.viewport.y + row as u16,
+            grapheme,
+            style,
+        );
+        true
+    }
 
     /// Draws a single `grapheme` at the current render position with a specified `style`.
     pub fn draw_grapheme(

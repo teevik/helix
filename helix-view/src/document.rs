@@ -93,7 +93,6 @@ impl Serialize for Mode {
         serializer.collect_str(self)
     }
 }
-
 /// A snapshot of the text of a document that we want to write out to disk
 #[derive(Debug, Clone)]
 pub struct DocumentSavedEvent {
@@ -1228,7 +1227,7 @@ impl Document {
             }
 
             self.diagnostics
-                .sort_unstable_by_key(|diagnostic| diagnostic.range);
+                .sort_by_key(|diagnostic| (diagnostic.range.start, diagnostic.severity));
 
             // Update the inlay hint annotations' positions, helping ensure they are displayed in the proper place
             let apply_inlay_hint_changes = |annotations: &mut Vec<InlineAnnotation>| {
@@ -1696,10 +1695,12 @@ impl Document {
     }
 
     pub fn shown_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> + DoubleEndedIterator {
-        self.diagnostics.iter().filter(|d| {
-            self.language_servers_with_feature(LanguageServerFeature::Diagnostics)
-                .any(|ls| ls.id() == d.language_server_id)
-        })
+        self.diagnostics.iter().filter(|d| self.show_diagnostic(d))
+    }
+
+    pub fn show_diagnostic(&self, d: &Diagnostic) -> bool {
+        self.language_servers_with_feature(LanguageServerFeature::Diagnostics)
+            .any(|ls| ls.id() == d.language_server_id)
     }
 
     pub fn replace_diagnostics(
@@ -1710,7 +1711,7 @@ impl Document {
         self.clear_diagnostics(language_server_id);
         self.diagnostics.append(&mut diagnostics);
         self.diagnostics
-            .sort_unstable_by_key(|diagnostic| diagnostic.range);
+            .sort_by_key(|diagnostic| (diagnostic.range.start, diagnostic.severity));
     }
 
     pub fn clear_diagnostics(&mut self, language_server_id: usize) {

@@ -6,6 +6,10 @@ use helix_view::editor::CursorCache;
 
 use crate::ui::document::{LinePos, TextRenderer};
 
+pub use diagnostics::InlineDiagnostics;
+
+mod diagnostics;
+
 /// Decorations are the primary mechanisim for extending the text rendering.
 ///
 /// Any on-screen element which is anchored to the rendered text in some form should
@@ -54,9 +58,9 @@ pub trait Decoration {
         &mut self,
         _renderer: &mut TextRenderer,
         _pos: LinePos,
-        _virt_off: usize,
-    ) -> usize {
-        0
+        _virt_off: Position,
+    ) -> Position {
+        Position::new(0, 0)
     }
 
     fn reset_pos(&mut self, _pos: usize) -> usize {
@@ -125,8 +129,13 @@ impl<'a> DecorationManager<'a> {
         }
     }
 
-    pub fn render_virtual_lines(&mut self, renderer: &mut TextRenderer, pos: LinePos) {
-        let mut virt_off = 0;
+    pub fn render_virtual_lines(
+        &mut self,
+        renderer: &mut TextRenderer,
+        pos: LinePos,
+        line_width: usize,
+    ) {
+        let mut virt_off = Position::new(1, line_width); // start at 1 so the line is never overwritten
         for (decoration, _) in &mut self.decorations {
             virt_off += decoration.render_virt_lines(renderer, pos, virt_off);
         }
