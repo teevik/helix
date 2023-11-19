@@ -54,10 +54,7 @@ impl<H: Iterator<Item = HighlightEvent>> Iterator for StyleIter<'_, H> {
                 HighlightEvent::HighlightEnd => {
                     self.active_highlights.pop();
                 }
-                HighlightEvent::Source { start, end } => {
-                    if start == end {
-                        continue;
-                    }
+                HighlightEvent::Source { end, .. } => {
                     let style = self
                         .active_highlights
                         .iter()
@@ -260,7 +257,7 @@ pub fn render_text<'t>(
         }
 
         // acquire the correct grapheme style
-        if char_pos >= style_span.1 {
+        while char_pos >= style_span.1 {
             style_span = styles.next().unwrap_or((Style::default(), usize::MAX));
         }
         char_pos += grapheme.doc_chars();
