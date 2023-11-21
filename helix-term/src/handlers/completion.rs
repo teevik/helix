@@ -108,9 +108,6 @@ impl helix_event::AsyncHook for CompletionHandler {
                     doc,
                     kind: TriggerKind::TriggerChar,
                 });
-                // stop debouncing imminently and request the completion
-                self.finish_debounce();
-                return None;
             }
             CompletionEvent::ManualTrigger { cursor, doc, view } => {
                 // immediately request completions and drop all auto completion requests
@@ -140,8 +137,8 @@ impl helix_event::AsyncHook for CompletionHandler {
         self.trigger.map(|trigger| {
             // if the current request was closed forget about it
             // otherwise immediately restart the completion request
-            let canceled = self.request.take().map_or(false, |req| !req.is_closed());
-            let timeout = if trigger.kind == TriggerKind::Auto && !canceled {
+            let cancel = self.request.take().map_or(false, |req| !req.is_closed());
+            let timeout = if trigger.kind == TriggerKind::Auto && !cancel {
                 self.config.load().editor.completion_timeout
             } else {
                 // we want almost instant completions for trigger chars
@@ -323,7 +320,7 @@ pub fn trigger_auto_completion(
     trigger_char_only: bool,
 ) {
     let config = editor.config.load();
-    if config.auto_completion {
+    if !config.auto_completion {
         return;
     }
     let (view, doc): (&helix_view::View, &helix_view::Document) = current_ref!(editor);
@@ -427,9 +424,11 @@ fn completion_post_command_hook(
                         cursor: primary_cursor,
                     }
                 }
-                // if we cancel completions here it would always cancel the manual request
+                // hacks: some commands are handeled elsewhere and we don't want to
+                // cancel in that case
                 MappableCommand::Static {
-                    name: "completion", ..
+                    name: "completion" | "insert_mode" | "append_mode",
+                    ..
                 } => return Ok(()),
                 _ => CompletionEvent::Cancel,
             };
