@@ -185,14 +185,12 @@ impl EditorView {
                 primary_cursor,
             });
         }
-        if config.lsp.inline_diagnostics.enable(inner.width) {
-            decorations.add_decoration(InlineDiagnostics::new(
-                doc,
-                theme,
-                primary_cursor,
-                config.lsp.inline_diagnostics.clone(),
-            ));
-        }
+        decorations.add_decoration(InlineDiagnostics::new(
+            doc,
+            theme,
+            primary_cursor,
+            config.lsp.inline_diagnostics.clone(),
+        ));
         render_document(
             surface,
             inner,

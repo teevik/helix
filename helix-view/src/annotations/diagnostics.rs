@@ -138,6 +138,7 @@ impl<'a> InlineDiagnosticAccumulator<'a> {
 
     pub fn reset_pos(&mut self, char_idx: usize) -> usize {
         self.idx = 0;
+        self.clear();
         self.skip_concealed(char_idx)
     }
 
