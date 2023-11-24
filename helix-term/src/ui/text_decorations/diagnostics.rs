@@ -236,13 +236,13 @@ impl Decoration for InlineDiagnostics<'_> {
         virt_off: Position,
     ) -> Position {
         let mut force_eol = false;
-        if let [(diag, _)] = &*self.state.stack {
-            if renderer.offset.col <= virt_off.col {
-                let line_end_col = virt_off.col - renderer.offset.col;
-                let message_width = diag.message.width();
-                force_eol = line_end_col + message_width <= renderer.viewport.width as usize;
-            }
-        }
+        // if let [(diag, _)] = &*self.state.stack {
+        //     if renderer.offset.col <= virt_off.col {
+        //         let line_end_col = virt_off.col - renderer.offset.col;
+        //         let message_width = diag.message.width();
+        //         force_eol = line_end_col + message_width <= renderer.viewport.width as usize;
+        //     }
+        // }
         let mut col_off = 0;
         let filter = self.state.filter();
         let eol_diagnostic = self

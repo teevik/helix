@@ -296,19 +296,19 @@ impl LineAnnotation for InlineDiagnostics<'_> {
     fn insert_virtual_lines(
         &mut self,
         _line_end_char_idx: usize,
-        line_end_visual_pos: Position,
+        _line_end_visual_pos: Position,
         _doc_line: usize,
     ) -> Position {
-        if let [(diag, _)] = &*self.state.stack {
-            if self.horizontal_off <= line_end_visual_pos.col {
-                let line_end_col = line_end_visual_pos.col - self.horizontal_off;
-                let message_width = diag.message.width();
-                if line_end_col + message_width <= self.width as usize {
-                    self.state.clear();
-                    return Position::new(0, message_width);
-                }
-            }
-        }
+        // if let [(diag, _)] = &*self.state.stack {
+        //     if self.horizontal_off <= line_end_visual_pos.col {
+        //         let line_end_col = line_end_visual_pos.col - self.horizontal_off;
+        //         let message_width = diag.message.width();
+        //         if line_end_col + message_width <= self.width as usize {
+        //             self.state.clear();
+        //             return Position::new(0, message_width);
+        //         }
+        //     }
+        // }
         self.state.compute_line_diagnostics();
         let multi = self.state.has_multi(self.width);
         let diagostic_height: usize = self

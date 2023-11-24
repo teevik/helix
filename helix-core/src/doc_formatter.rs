@@ -459,6 +459,7 @@ impl<'t> Iterator for DocumentFormatter<'t> {
             self.annotations.process_virtual_text_anchors(&grapheme);
         }
         if grapheme.raw == Grapheme::Newline {
+            self.visual_pos.col += 1;
             let virtual_lines =
                 self.annotations
                     .virtual_lines_at(self.char_pos, self.visual_pos, self.line_pos);
