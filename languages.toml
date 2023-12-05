@@ -2908,15 +2908,6 @@ name = "strace"
 source = { git = "https://github.com/sigmaSd/tree-sitter-strace", rev = "2b18fdf9a01e7ec292cc6006724942c81beb7fd5" }
 
 [[language]]
-name = "gemini"
-scope = "source.gmi"
-file-types = ["gmi"]
-
-[[grammar]]
-name = "gemini"
-source = { git = "https://git.sr.ht/~nbsp/tree-sitter-gemini", rev = "3cc5e4bdf572d5df4277fc2e54d6299bd59a54b3" }
-
-[[language]]
 name = "templ"
 scope = "source.templ"
 file-types = ["templ"]
